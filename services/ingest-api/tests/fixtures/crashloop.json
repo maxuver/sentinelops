@@ -1,0 +1,39 @@
+{
+  "version": "4",
+  "groupKey": "{}:{alertname=\"KubePodCrashLooping\"}",
+  "status": "firing",
+  "receiver": "sentinelops",
+  "groupLabels": { "alertname": "KubePodCrashLooping" },
+  "commonLabels": {
+    "alertname": "KubePodCrashLooping",
+    "severity": "warning",
+    "namespace": "demo",
+    "pod": "billing-api-7f9c6d5b8-x2j4q",
+    "container": "billing-api"
+  },
+  "commonAnnotations": {
+    "description": "Pod demo/billing-api-7f9c6d5b8-x2j4q (billing-api) is in waiting state (reason: CrashLoopBackOff).",
+    "summary": "Pod is crash looping."
+  },
+  "externalURL": "http://alertmanager.demo.local",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "KubePodCrashLooping",
+        "severity": "warning",
+        "namespace": "demo",
+        "pod": "billing-api-7f9c6d5b8-x2j4q",
+        "container": "billing-api"
+      },
+      "annotations": {
+        "description": "Pod demo/billing-api-7f9c6d5b8-x2j4q (billing-api) is in waiting state (reason: CrashLoopBackOff).",
+        "summary": "Pod is crash looping."
+      },
+      "startsAt": "2026-07-28T03:12:45Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.demo.local/graph?g0.expr=...",
+      "fingerprint": "b0e0b3cbc9d21c48"
+    }
+  ]
+}
