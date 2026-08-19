@@ -1,0 +1,40 @@
+# kube-prometheus-stack values for the local kind cluster.
+#
+# NodePorts match the extraPortMappings in kind/cluster.yaml, so the UIs are
+# reachable on localhost without port-forwarding.
+
+grafana:
+  service:
+    type: NodePort
+    nodePort: 30300
+  adminPassword: sentinelops
+  # Keep the footprint small — this runs alongside a local LLM.
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30900
+  prometheusSpec:
+    retention: 6h
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+
+alertmanager:
+  service:
+    type: NodePort
+    nodePort: 30903
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+
+# Not useful on kind, and they generate noise that pollutes fault-injection runs.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
