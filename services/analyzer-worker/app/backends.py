@@ -100,9 +100,11 @@ class AnthropicBackend:
             resp = await self._get_client().messages.create(
                 model=self._cfg.anthropic_model,
                 max_tokens=self._cfg.anthropic_max_tokens,
-                temperature=0,  # reproducibility: same context → same hypothesis
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
+                # temperature is no longer a typed kwarg in the SDK's current major;
+                # pass it through the body. 0 = reproducible triage on Haiku-class models.
+                extra_body={"temperature": 0},
             )
         except Exception as exc:  # network/API errors → graceful degradation
             raise BackendError(f"anthropic call failed: {exc}") from exc

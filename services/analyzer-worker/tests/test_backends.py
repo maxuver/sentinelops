@@ -89,7 +89,8 @@ async def test_anthropic_backend_parses_and_prices():
     # 4000/1e6*1.0 + 400/1e6*5.0 = 0.004 + 0.002 = 0.006  (~the whitepaper number)
     assert result.cost_usd == pytest.approx(0.006)
     assert len(calls) == 1  # exactly one call
-    assert calls[0]["temperature"] == 0  # reproducibility
+    assert calls[0]["model"] == "claude-haiku-4-5"
+    assert calls[0]["extra_body"] == {"temperature": 0}  # reproducibility
 
 
 async def test_anthropic_backend_raises_on_refusal():
