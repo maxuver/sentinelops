@@ -18,3 +18,15 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  analyzer-worker:
+    build: services/analyzer-worker
+    environment:
+      SENTINELOPS_REDIS_URL: redis://redis:6379/0
+      # stub backend by default → runs offline with no API key or model server.
+      # Set to "anthropic" (+ ANTHROPIC_API_KEY) or "ollama" for real analysis.
+      SENTINELOPS_LLM_PROVIDER: stub
+      SENTINELOPS_NOTIFIER: stub
+    depends_on:
+      redis:
+        condition: service_healthy
