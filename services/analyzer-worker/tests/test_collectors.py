@@ -4,13 +4,23 @@ CC-20 The K8s-events collector scopes to the involved pod when known.
 CC-21 Warning events are surfaced before Normal ones, and output is capped.
 CC-22 One dead collector degrades context instead of failing the analysis.
 CC-23 Collectors are selected by config, not code.
+CC-24 The Prometheus collector runs its fixed queries and formats the series.
+CC-25 The Loki collector builds a pod-scoped selector and extracts log lines.
 """
 
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
-from app.collectors import AggregateCollector, K8sEventsCollector, StubCollector, get_collector
+from app.collectors import (
+    AggregateCollector,
+    K8sEventsCollector,
+    LokiCollector,
+    PrometheusCollector,
+    StubCollector,
+    get_collector,
+)
 from app.config import Settings
 from app.models import StreamAlert
 
@@ -91,12 +101,102 @@ async def test_aggregate_tolerates_a_failing_collector():  # CC-22
 
 
 def test_get_collector_selects_by_config():  # CC-23
-    agg = get_collector(Settings(collectors="stub,k8s-events"))
+    agg = get_collector(Settings(collectors="stub,k8s-events,prometheus,loki"))
     assert isinstance(agg, AggregateCollector)
-    assert len(agg._collectors) == 2
+    assert len(agg._collectors) == 4
     assert isinstance(agg._collectors[1], K8sEventsCollector)
+    assert isinstance(agg._collectors[2], PrometheusCollector)
+    assert isinstance(agg._collectors[3], LokiCollector)
 
 
 def test_get_collector_rejects_unknown():
     with pytest.raises(ValueError):
         get_collector(Settings(collectors="stub,mystery"))
+
+
+async def test_prometheus_collector_formats_series():  # CC-24
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params["query"])
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {
+                            "metric": {
+                                "__name__": "kube_pod_container_status_restarts_total",
+                                "pod": "billing-api-x2j4q",
+                            },
+                            "value": [1690000000, "7"],
+                        }
+                    ],
+                },
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://prom")
+    collector = PrometheusCollector("http://prom", client=client, queries=('up{pod="%(pod)s"}',))
+    bundle = await collector.collect(
+        StreamAlert(labels={"namespace": "demo", "pod": "billing-api-x2j4q"})
+    )
+
+    assert bundle.metrics == [
+        'kube_pod_container_status_restarts_total{pod="billing-api-x2j4q"} = 7'
+    ]
+    assert seen == ['up{pod="billing-api-x2j4q"}']  # template substituted with the pod
+    await client.aclose()
+
+
+async def test_loki_collector_extracts_lines_and_scopes_to_pod():  # CC-25
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["query"] = request.url.params["query"]
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {
+                    "resultType": "streams",
+                    "result": [
+                        {
+                            "stream": {"pod": "billing-api-x2j4q"},
+                            "values": [
+                                ["1690000000000000000", "ERROR out of memory: Killed process 1"],
+                                ["1690000000000000001", "FATAL restarting"],
+                            ],
+                        }
+                    ],
+                },
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://loki")
+    collector = LokiCollector("http://loki", client=client, max_lines=10)
+    bundle = await collector.collect(
+        StreamAlert(labels={"namespace": "demo", "pod": "billing-api-x2j4q"})
+    )
+
+    assert "ERROR out of memory: Killed process 1" in bundle.log_lines
+    assert len(bundle.log_lines) == 2
+    assert 'pod="billing-api-x2j4q"' in captured["query"]  # pod-scoped selector
+    assert 'namespace="demo"' in captured["query"]
+    await client.aclose()
+
+
+async def test_loki_respects_line_cap():
+    def handler(request: httpx.Request) -> httpx.Response:
+        vals = [[str(i), f"line {i}"] for i in range(100)]
+        return httpx.Response(
+            200, json={"data": {"result": [{"stream": {}, "values": vals}]}}
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://loki")
+    collector = LokiCollector("http://loki", client=client, max_lines=5)
+    bundle = await collector.collect(StreamAlert(labels={"namespace": "demo"}))
+    assert len(bundle.log_lines) == 5
+    await client.aclose()

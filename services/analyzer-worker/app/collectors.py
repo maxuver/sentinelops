@@ -16,12 +16,18 @@ Real Loki / Prometheus / Kubernetes-events collectors implement the same
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 from .config import Settings, settings
 from .models import ContextBundle, StreamAlert
 from .ports import Collector
 
 logger = logging.getLogger("analyzer-worker.collectors")
+
+
+def _alert_time(alert: StreamAlert) -> datetime:
+    """The timestamp to center context collection on."""
+    return alert.startsAt or datetime.now(timezone.utc)
 
 
 class StubCollector:
@@ -114,6 +120,110 @@ class K8sEventsCollector:
             await self._api_client.close()
 
 
+class PrometheusCollector:
+    """Query Prometheus for the metrics around the alert — restarts, memory and
+    CPU pressure for the alerting pod. Instant queries at the alert timestamp.
+
+    Read-only HTTP. The query templates are fixed in code (ADR-0001), substituted
+    with the alert's namespace/pod; override the set per deployment if needed.
+    """
+
+    name = "prometheus"
+
+    DEFAULT_QUERIES = (
+        'kube_pod_container_status_restarts_total{namespace="%(namespace)s",pod="%(pod)s"}',
+        'container_memory_working_set_bytes{namespace="%(namespace)s",pod="%(pod)s"}',
+        (
+            'sum(rate(container_cpu_usage_seconds_total'
+            '{namespace="%(namespace)s",pod="%(pod)s"}[5m]))'
+        ),
+    )
+
+    def __init__(self, url: str, client=None, queries: tuple[str, ...] | None = None) -> None:
+        self._url = url
+        self._client = client  # inject httpx.AsyncClient in tests
+        self._queries = queries or self.DEFAULT_QUERIES
+
+    async def collect(self, alert: StreamAlert) -> ContextBundle:
+        import httpx
+
+        ctx = {"namespace": alert.namespace or "default", "pod": alert.labels.get("pod", "")}
+        when = str(_alert_time(alert).timestamp())
+        client = self._client or httpx.AsyncClient(base_url=self._url, timeout=10.0)
+        metrics: list[str] = []
+        try:
+            for template in self._queries:
+                query = template % ctx
+                resp = await client.get("/api/v1/query", params={"query": query, "time": when})
+                resp.raise_for_status()
+                for series in resp.json().get("data", {}).get("result", []):
+                    metrics.append(self._format(query, series))
+        finally:
+            if self._client is None:
+                await client.aclose()
+        return ContextBundle(metrics=metrics, sources_ok=[self.name])
+
+    @staticmethod
+    def _format(query: str, series: dict) -> str:
+        metric = series.get("metric", {})
+        name = metric.get("__name__", "")
+        value = (series.get("value") or [None, ""])[1]
+        labels = ",".join(f'{k}="{v}"' for k, v in metric.items() if k != "__name__")
+        head = f"{name}{{{labels}}}" if name else query
+        return f"{head} = {value}"
+
+
+class LokiCollector:
+    """Query Loki for the logs of the alerting object in a window around the
+    alert. Read-only HTTP; line count and time window are capped (ADR-0002).
+    """
+
+    name = "loki"
+
+    def __init__(
+        self, url: str, client=None, max_lines: int = 50, window_minutes: int = 15
+    ) -> None:
+        self._url = url
+        self._client = client  # inject httpx.AsyncClient in tests
+        self._max = max_lines
+        self._window = window_minutes
+
+    def _selector(self, alert: StreamAlert) -> str:
+        parts = [f'namespace="{alert.namespace or "default"}"']
+        pod = alert.labels.get("pod")
+        if pod:
+            parts.append(f'pod="{pod}"')
+        return "{" + ", ".join(parts) + "}"
+
+    async def collect(self, alert: StreamAlert) -> ContextBundle:
+        import httpx
+
+        t = _alert_time(alert)
+        start = int((t - timedelta(minutes=self._window)).timestamp() * 1e9)
+        end = int((t + timedelta(minutes=5)).timestamp() * 1e9)
+        client = self._client or httpx.AsyncClient(base_url=self._url, timeout=10.0)
+        lines: list[str] = []
+        try:
+            resp = await client.get(
+                "/loki/api/v1/query_range",
+                params={
+                    "query": self._selector(alert),
+                    "start": str(start),
+                    "end": str(end),
+                    "limit": self._max,
+                    "direction": "backward",
+                },
+            )
+            resp.raise_for_status()
+            for stream in resp.json().get("data", {}).get("result", []):
+                for _ts, line in stream.get("values", []):
+                    lines.append(line)
+        finally:
+            if self._client is None:
+                await client.aclose()
+        return ContextBundle(log_lines=lines[: self._max], sources_ok=[self.name])
+
+
 class AggregateCollector:
     """Fan out to several collectors; never let one failure sink the rest."""
 
@@ -141,6 +251,10 @@ class AggregateCollector:
 _REGISTRY = {
     "stub": lambda cfg: StubCollector(),
     "k8s-events": lambda cfg: K8sEventsCollector(max_events=cfg.k8s_max_events),
+    "prometheus": lambda cfg: PrometheusCollector(cfg.prometheus_url),
+    "loki": lambda cfg: LokiCollector(
+        cfg.loki_url, max_lines=cfg.loki_max_lines, window_minutes=cfg.loki_window_minutes
+    ),
 }
 
 

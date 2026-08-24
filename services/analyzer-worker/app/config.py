@@ -21,10 +21,14 @@ class Settings(BaseSettings):
     # many delivery attempts, so a poison message can never wedge the loop (ADR-0003).
     max_delivery_attempts: int = 5
 
-    # --- context collectors (comma-separated: stub, k8s-events) ---
+    # --- context collectors (comma-separated: stub, k8s-events, prometheus, loki) ---
     # Fixed in config, not chosen by the model at runtime (ADR-0001).
     collectors: str = "stub"
     k8s_max_events: int = 20
+    prometheus_url: str = "http://localhost:9090"
+    loki_url: str = "http://localhost:3100"
+    loki_max_lines: int = 50
+    loki_window_minutes: int = 15
 
     # --- LLM backend (ADR-0002: selecting a backend is configuration, not code) ---
     llm_provider: str = "stub"  # "anthropic" | "ollama" | "stub"
