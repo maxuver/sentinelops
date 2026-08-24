@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-analyzer-worker
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: analyzer-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: analyzer-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: analyzer-worker
+    spec:
+      # Reads Kubernetes events with the least-privilege, read-only SA (rbac.yaml).
+      serviceAccountName: {{ .Release.Name }}-analyzer
+      containers:
+        - name: analyzer-worker
+          image: {{ .Values.images.analyzer }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          {{- if eq .Values.config.llmProvider "anthropic" }}
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-llm
+                  key: anthropic-api-key
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

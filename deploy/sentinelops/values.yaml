@@ -1,0 +1,34 @@
+# SentinelOps Helm values. Defaults target a local kind cluster with images
+# side-loaded via `kind load docker-image`.
+
+images:
+  ingest: sentinelops/ingest-api:dev
+  analyzer: sentinelops/analyzer-worker:dev
+  pullPolicy: IfNotPresent
+
+redis:
+  image: redis:7-alpine
+
+# Runtime configuration (SENTINELOPS_* env). Safe offline defaults: the stub
+# backend needs no API key, and the k8s-events collector reads live cluster
+# events. Switch llmProvider to "anthropic" (+ apiKeySecret) or "ollama", and
+# add "prometheus,loki" to collectors, per environment.
+config:
+  logLevel: INFO
+  llmProvider: stub
+  collectors: k8s-events
+  notifier: stub
+
+# Read-only RBAC for the analyzer's Kubernetes-events collector.
+# clusterWide=true grants get/list/watch on events across all namespaces
+# (events only, read-only). Set false to restrict to the release namespace.
+rbac:
+  clusterWide: true
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi

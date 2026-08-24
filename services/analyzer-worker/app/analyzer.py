@@ -90,4 +90,16 @@ class Analyzer:
         """Persist and deliver. Always reached, on every status."""
         await self._store.save(incident)
         await self._notifier.notify(incident)
+        cause = (
+            incident.hypothesis.root_cause if incident.hypothesis else incident.failure_reason
+        ) or ""
+        logger.info(
+            "incident alert=%s status=%s backend=%s latency=%dms cost=$%.6f cause=%r",
+            incident.alertname,
+            incident.status.value,
+            incident.backend,
+            incident.latency_ms,
+            incident.cost_usd,
+            cause[:80],
+        )
         return incident

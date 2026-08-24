@@ -44,3 +44,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build services/ingest-api
       - run: docker build services/analyzer-worker
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint deploy/sentinelops
+      - run: helm template so deploy/sentinelops > /dev/null

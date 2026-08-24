@@ -1,0 +1,18 @@
+SentinelOps is installed in namespace {{ .Release.Namespace }}.
+
+Pipeline: Alertmanager webhook -> ingest-api -> Redis Streams -> analyzer-worker.
+LLM backend: {{ .Values.config.llmProvider }} | collectors: {{ .Values.config.collectors }}
+
+Send a test alert:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-ingest-api 8080:8080
+  curl -X POST localhost:8080/webhook/alertmanager \
+    -H 'content-type: application/json' -d @alert.json
+
+Watch the analyzer produce incidents:
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ .Release.Name }}-analyzer-worker
+{{- if eq .Values.config.llmProvider "anthropic" }}
+
+Anthropic backend selected: create the API-key secret (referenced by the worker):
+  kubectl -n {{ .Release.Namespace }} create secret generic {{ .Release.Name }}-llm \
+    --from-literal=anthropic-api-key=sk-ant-...
+{{- end }}

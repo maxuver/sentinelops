@@ -1,0 +1,62 @@
+# Least-privilege access for the analyzer's Kubernetes-events collector:
+# read-only, and only on events. No write verbs, no other resources.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-analyzer
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+---
+{{- if .Values.rbac.clusterWide }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-analyzer-events-reader
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-analyzer-events-reader
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-analyzer-events-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-analyzer
+    namespace: {{ .Release.Namespace }}
+{{- else }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-analyzer-events-reader
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-analyzer-events-reader
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-analyzer-events-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-analyzer
+    namespace: {{ .Release.Namespace }}
+{{- end }}
