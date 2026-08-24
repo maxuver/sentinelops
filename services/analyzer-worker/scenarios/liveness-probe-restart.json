@@ -1,0 +1,32 @@
+{
+  "name": "liveness-probe-restart",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodCrashLooping",
+      "namespace": "demo",
+      "pod": "search-api-7b6d5c4f8-lmn45",
+      "container": "search-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/search-api is being restarted by the kubelet.",
+      "summary": "Pod is crash looping."
+    },
+    "startsAt": "2026-08-24T11:17:52Z",
+    "fingerprint": "f0e1d2c3b4a59687"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning Unhealthy pod/search-api-7b6d5c4f8-lmn45 x5: Liveness probe failed: HTTP probe failed with statuscode: 500",
+      "Normal Killing pod/search-api-7b6d5c4f8-lmn45: Container search-api failed liveness probe, will be restarted"
+    ],
+    "metrics": [
+      "sum(rate(container_cpu_usage_seconds_total{pod=\"search-api-7b6d5c4f8-lmn45\"}[5m])) = 0.98 (limit 1.0)"
+    ],
+    "log_lines": [
+      "WARN event loop blocked for 5200ms",
+      "ERROR healthcheck handler timed out after 3s"
+    ]
+  }
+}

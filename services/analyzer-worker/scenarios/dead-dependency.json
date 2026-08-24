@@ -1,0 +1,29 @@
+{
+  "name": "dead-dependency",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "HighErrorRate",
+      "namespace": "demo",
+      "service": "payments-api",
+      "severity": "critical"
+    },
+    "annotations": {
+      "description": "payments-api is returning 5xx for more than 5% of requests.",
+      "summary": "High error rate."
+    },
+    "startsAt": "2026-08-24T18:22:47Z",
+    "fingerprint": "e5f6a7b8c9d0e1f2"
+  },
+  "context": {
+    "k8s_events": [],
+    "metrics": [
+      "sum(rate(http_requests_total{service=\"payments-api\",code=~\"5..\"}[5m])) = 34.2",
+      "sum(rate(http_requests_total{service=\"payments-api\"}[5m])) = 41.0"
+    ],
+    "log_lines": [
+      "ERROR could not connect to postgres at postgres:5432: connection refused",
+      "WARN circuit breaker OPEN for payments-db after 20 consecutive failures"
+    ]
+  }
+}

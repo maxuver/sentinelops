@@ -1,0 +1,33 @@
+{
+  "name": "crashloop-oom",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodCrashLooping",
+      "namespace": "demo",
+      "pod": "billing-api-7f9c6d5b8-x2j4q",
+      "container": "billing-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/billing-api is restarting repeatedly.",
+      "summary": "Pod is crash looping."
+    },
+    "startsAt": "2026-08-24T03:12:45Z",
+    "fingerprint": "b0e0b3cbc9d21c48"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning BackOff pod/billing-api-7f9c6d5b8-x2j4q x9: Back-off restarting failed container billing-api",
+      "Warning OOMKilling pod/billing-api-7f9c6d5b8-x2j4q x3: Memory cgroup out of memory: Killed process 1 (python)"
+    ],
+    "metrics": [
+      "container_memory_working_set_bytes{pod=\"billing-api-7f9c6d5b8-x2j4q\"} = 536870912 (limit 536870912)",
+      "kube_pod_container_status_restarts_total{pod=\"billing-api-7f9c6d5b8-x2j4q\"} = 9"
+    ],
+    "log_lines": [
+      "FATAL out of memory: Killed process 1 (python)",
+      "MemoryError: Unable to allocate array"
+    ]
+  }
+}

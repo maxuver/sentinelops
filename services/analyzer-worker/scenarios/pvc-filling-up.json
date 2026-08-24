@@ -1,0 +1,31 @@
+{
+  "name": "pvc-filling-up",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePersistentVolumeFillingUp",
+      "namespace": "demo",
+      "persistentvolumeclaim": "data-postgres-0",
+      "severity": "critical"
+    },
+    "annotations": {
+      "description": "The PersistentVolume claimed by data-postgres-0 in demo is only 1% free.",
+      "summary": "PersistentVolume is filling up."
+    },
+    "startsAt": "2026-08-24T22:58:01Z",
+    "fingerprint": "d4c3b2a1f0e9d8c7"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning FreeDiskSpaceFailed node/sentinelops-worker2: failed to garbage collect required amount of images"
+    ],
+    "metrics": [
+      "kubelet_volume_stats_available_bytes{persistentvolumeclaim=\"data-postgres-0\"} = 104857600",
+      "kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-postgres-0\"} = 10737418240"
+    ],
+    "log_lines": [
+      "PANIC: could not write to file \"pg_wal/000000010000000000000042\": No space left on device",
+      "FATAL: the database system is in recovery mode"
+    ]
+  }
+}

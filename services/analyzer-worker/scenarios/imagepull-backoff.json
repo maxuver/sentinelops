@@ -1,0 +1,28 @@
+{
+  "name": "imagepull-backoff",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodNotReady",
+      "namespace": "demo",
+      "pod": "checkout-api-6c9f7d4b5-abc12",
+      "container": "checkout-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/checkout-api has been in a non-ready state for longer than 15 minutes.",
+      "summary": "Pod not ready."
+    },
+    "startsAt": "2026-08-24T09:41:10Z",
+    "fingerprint": "a1f2c3d4e5b60718"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning Failed pod/checkout-api-6c9f7d4b5-abc12 x2: Failed to pull image \"registry.internal/checkout:v2.3.1\": not found",
+      "Warning Failed pod/checkout-api-6c9f7d4b5-abc12: Error: ErrImagePull",
+      "Warning Failed pod/checkout-api-6c9f7d4b5-abc12: Error: ImagePullBackOff"
+    ],
+    "metrics": [],
+    "log_lines": []
+  }
+}

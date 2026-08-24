@@ -1,0 +1,32 @@
+{
+  "name": "dns-resolution-failure",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodCrashLooping",
+      "namespace": "demo",
+      "pod": "orders-api-5d8c6b7f9-qr3st",
+      "container": "orders-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/orders-api is restarting; readiness checks failing.",
+      "summary": "Pod is crash looping."
+    },
+    "startsAt": "2026-08-24T14:05:33Z",
+    "fingerprint": "c7d8e9f0a1b2c3d4"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning Unhealthy pod/orders-api-5d8c6b7f9-qr3st x6: Readiness probe failed: dial tcp: lookup postgres.demo.svc.cluster.local: no such host"
+    ],
+    "metrics": [
+      "coredns_dns_responses_total{rcode=\"SERVFAIL\"} = 1240",
+      "coredns_dns_request_duration_seconds{quantile=\"0.99\"} = 4.9"
+    ],
+    "log_lines": [
+      "ERROR could not resolve host postgres.demo.svc.cluster.local",
+      "getaddrinfo ENOTFOUND postgres.demo.svc.cluster.local"
+    ]
+  }
+}
