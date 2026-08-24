@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from .config import Settings, settings
 from .models import ContextBundle, StreamAlert
 from .ports import Collector
 
@@ -46,6 +47,73 @@ class StubCollector:
         )
 
 
+class K8sEventsCollector:
+    """Read Kubernetes events for the alerting object — what `kubectl describe`
+    would show an engineer: BackOff, OOMKilled, FailedScheduling, probe failures.
+
+    Read-only by design (ADR-0004 thread): the ServiceAccount needs only `get`/
+    `list` on events. The API client is created lazily so tests inject a fake and
+    offline runs never touch a cluster.
+    """
+
+    name = "k8s-events"
+
+    def __init__(self, api=None, max_events: int = 20) -> None:
+        self._api = api  # inject a CoreV1Api-like object in tests
+        self._max = max_events
+        self._api_client = None
+        self._owns_client = False
+
+    async def _get_api(self):
+        if self._api is None:  # pragma: no cover - real cluster path
+            from kubernetes_asyncio import client, config
+
+            try:
+                config.load_incluster_config()
+            except config.ConfigException:
+                await config.load_kube_config()
+            self._api_client = client.ApiClient()
+            self._api = client.CoreV1Api(self._api_client)
+            self._owns_client = True
+        return self._api
+
+    async def collect(self, alert: StreamAlert) -> ContextBundle:
+        ns = alert.namespace or "default"
+        api = await self._get_api()
+        resp = await api.list_namespaced_event(ns)
+        items = list(resp.items)
+
+        # If we know the involved pod, keep only its events (data minimization,
+        # ADR-0002). Fall back to namespace-wide if that leaves nothing.
+        pod = alert.labels.get("pod")
+        if pod:
+            scoped = [e for e in items if getattr(e.involved_object, "name", None) == pod]
+            items = scoped or items
+
+        # Warnings are the useful signal — surface them first, then cap.
+        warnings = [e for e in items if e.type == "Warning"]
+        others = [e for e in items if e.type != "Warning"]
+        chosen = (warnings + others)[: self._max]
+        return ContextBundle(
+            k8s_events=[self._format(e) for e in chosen],
+            sources_ok=[self.name],
+        )
+
+    @staticmethod
+    def _format(event) -> str:
+        io = event.involved_object
+        kind = (getattr(io, "kind", "") or "").lower()
+        name = getattr(io, "name", "") or ""
+        obj = f"{kind}/{name}".strip("/")
+        count = getattr(event, "count", None)
+        cnt = f" x{count}" if count and count > 1 else ""
+        return f"{event.type} {event.reason} {obj}{cnt}: {event.message}".strip()
+
+    async def aclose(self) -> None:
+        if self._owns_client and self._api_client is not None:
+            await self._api_client.close()
+
+
 class AggregateCollector:
     """Fan out to several collectors; never let one failure sink the rest."""
 
@@ -70,10 +138,23 @@ class AggregateCollector:
         return merged
 
 
-def get_collector() -> Collector:
-    """Default collector for this iteration.
+_REGISTRY = {
+    "stub": lambda cfg: StubCollector(),
+    "k8s-events": lambda cfg: K8sEventsCollector(max_events=cfg.k8s_max_events),
+}
 
-    Wrapped in AggregateCollector so real datasource collectors can be appended
-    later without changing the Analyzer.
+
+def get_collector(cfg: Settings = settings) -> Collector:
+    """Build the configured collectors (comma-separated `SENTINELOPS_COLLECTORS`).
+
+    Wrapped in AggregateCollector so one dead datasource degrades context rather
+    than failing the analysis, and so new collectors are added by config, not code.
     """
-    return AggregateCollector([StubCollector()])
+    names = [n.strip() for n in cfg.collectors.split(",") if n.strip()]
+    built = []
+    for name in names:
+        factory = _REGISTRY.get(name)
+        if factory is None:
+            raise ValueError(f"unknown collector: {name!r} (known: {sorted(_REGISTRY)})")
+        built.append(factory(cfg))
+    return AggregateCollector(built or [StubCollector()])

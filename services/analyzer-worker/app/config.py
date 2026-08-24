@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # many delivery attempts, so a poison message can never wedge the loop (ADR-0003).
     max_delivery_attempts: int = 5
 
+    # --- context collectors (comma-separated: stub, k8s-events) ---
+    # Fixed in config, not chosen by the model at runtime (ADR-0001).
+    collectors: str = "stub"
+    k8s_max_events: int = 20
+
     # --- LLM backend (ADR-0002: selecting a backend is configuration, not code) ---
     llm_provider: str = "stub"  # "anthropic" | "ollama" | "stub"
     # Fast path defaults to Haiku: analysing *every* alert then costs cents
