@@ -157,7 +157,9 @@ class OllamaBackend:
 
         from .prompt import SYSTEM_PROMPT
 
-        client = self._client or httpx.AsyncClient(base_url=self._cfg.ollama_url, timeout=None)
+        client = self._client or httpx.AsyncClient(
+            base_url=self._cfg.ollama_url, timeout=self._cfg.llm_timeout_seconds
+        )
         payload = {
             "model": self._cfg.ollama_model,
             "stream": False,
