@@ -9,6 +9,20 @@ services:
       timeout: 3s
       retries: 5
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel
+      POSTGRES_DB: sentinelops
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinelops"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   ingest-api:
     build: services/ingest-api
     environment:
@@ -27,6 +41,10 @@ services:
       # Set to "anthropic" (+ ANTHROPIC_API_KEY) or "ollama" for real analysis.
       SENTINELOPS_LLM_PROVIDER: stub
       SENTINELOPS_NOTIFIER: stub
+      SENTINELOPS_STORE: postgres
+      SENTINELOPS_POSTGRES_DSN: postgresql://sentinel:sentinel@postgres:5432/sentinelops
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy

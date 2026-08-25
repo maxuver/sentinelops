@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # Per-UTC-day spend cap; on exhaustion the pipeline degrades to raw delivery.
     daily_budget_usd: float = 5.00
 
+    # --- persistence (ADR-0002: only post-redaction data is stored) ---
+    store: str = "memory"  # "memory" | "postgres"
+    postgres_dsn: str = "postgresql://sentinel:sentinel@localhost:5432/sentinelops"
+
     # --- delivery ---
     notifier: str = "stub"  # "telegram" | "stub"
     telegram_bot_token: str = ""
