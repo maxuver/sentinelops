@@ -18,7 +18,7 @@ venv/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
-.terraform.lock.hcl
+# .terraform.lock.hcl is committed on purpose (pins provider versions).
 
 # IDE / OS
 .idea/
