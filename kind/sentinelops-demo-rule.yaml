@@ -1,0 +1,22 @@
+# A fast-firing crash-loop alert for local demos. The built-in KubePodCrashLooping
+# rule uses for:15m, too slow to demo. This fires within a couple of minutes.
+# The `release: kps` label makes the kube-prometheus-stack Prometheus select it.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sentinelops-demo
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: sentinelops-demo
+      rules:
+        - alert: KubePodCrashLoopingFast
+          expr: increase(kube_pod_container_status_restarts_total[3m]) > 1
+          for: 30s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod is crash looping."
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} is crash looping."

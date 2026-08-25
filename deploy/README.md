@@ -77,6 +77,26 @@ Validated on kind: a crash-looping pod produced real BackOff events, real
 metrics, and real log lines shipped by Promtail, all collected by the three
 collectors and fed to the analyzer.
 
+## Autonomous loop (Alertmanager fires the pipeline)
+
+With the monitoring stack installed, SentinelOps runs with no manual step. A
+Prometheus rule fires on a crash-looping pod, Alertmanager routes it to the
+ingest-api webhook (routing is in `kind/values-monitoring.yaml`), and the
+analyzer produces an incident.
+
+```bash
+kubectl apply -f kind/sentinelops-demo-rule.yaml       # fast crash-loop alert
+kubectl -n sentinelops run billing-api --image=busybox --command -- \
+  sh -c "echo boom; sleep 2; exit 1"
+
+# ~90s later, with no manual curl:
+kubectl -n sentinelops logs deploy/so-ingest-api      | grep queued
+kubectl -n sentinelops logs deploy/so-analyzer-worker | grep 'incident alert'
+```
+
+Validated on kind: pod restarts -> KubePodCrashLoopingFast fires -> Alertmanager
+webhook -> `{"queued":1}` -> analyzer incident, end to end.
+
 ## Real LLM backend
 
 ```bash

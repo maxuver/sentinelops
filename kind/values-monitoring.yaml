@@ -28,6 +28,27 @@ alertmanager:
   alertmanagerSpec:
     resources:
       requests: { cpu: 25m, memory: 64Mi }
+  # Route Kubernetes crash-loop alerts to the SentinelOps ingest-api webhook.
+  # Everything else goes to the null receiver, so only the alerts SentinelOps
+  # handles reach the pipeline. This is the real architecture: Alertmanager is
+  # the source of truth for what is firing; SentinelOps is an overlay on it.
+  config:
+    route:
+      receiver: "null"
+      group_by: ["alertname", "namespace", "pod"]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 1h
+      routes:
+        - receiver: "sentinelops"
+          matchers:
+            - alertname =~ "KubePodCrashLooping.*"
+    receivers:
+      - name: "null"
+      - name: "sentinelops"
+        webhook_configs:
+          - url: "http://so-ingest-api.sentinelops:8080/webhook/alertmanager"
+            send_resolved: false
 
 # Not useful on kind, and they generate noise that pollutes fault-injection runs.
 kubeControllerManager:
