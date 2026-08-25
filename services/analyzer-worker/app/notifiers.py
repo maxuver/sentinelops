@@ -19,6 +19,13 @@ def format_message(incident: Incident) -> str:
         h = incident.hypothesis
         lines.append("")
         lines.append(f"🤖 Likely cause ({h.confidence} confidence): {h.root_cause}")
+        if h.blast_radius and h.blast_radius != "unknown":
+            lines.append(f"Blast radius: {h.blast_radius}")
+        if h.evidence:
+            lines.append("Evidence:")
+            lines.extend(f"  - {e}" for e in h.evidence)
+        if h.disproof:
+            lines.append(f"Cheapest way to disprove: {h.disproof}")
         if h.next_steps:
             lines.append("Next steps:")
             lines.extend(f"  {i}. {s}" for i, s in enumerate(h.next_steps, 1))

@@ -78,11 +78,20 @@ class ContextBundle(BaseModel):
 
 
 class Hypothesis(BaseModel):
-    """The structured output of a single LLM call (ADR-0001)."""
+    """The structured output of a single LLM call (ADR-0001).
+
+    A hypothesis is cheap; knowing how to disprove it is the useful part
+    (ADR-0004). Every hypothesis therefore carries the evidence that supports it,
+    the cheapest observation that would prove it wrong, and its blast radius,
+    which is a separate guardrail, not a ranking multiplier.
+    """
 
     root_cause: str
     severity: str = "unknown"
     confidence: str = "medium"
+    evidence: list[str] = Field(default_factory=list)
+    disproof: str = ""
+    blast_radius: str = "unknown"
     next_steps: list[str] = Field(default_factory=list)
 
 

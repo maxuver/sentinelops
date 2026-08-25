@@ -44,10 +44,16 @@ def parse_hypothesis(text: str) -> Hypothesis:
     steps = data.get("next_steps") or []
     if isinstance(steps, str):
         steps = [steps]
+    evidence = data.get("evidence") or []
+    if isinstance(evidence, str):
+        evidence = [evidence]
     return Hypothesis(
         root_cause=str(data["root_cause"]).strip(),
         severity=str(data.get("severity", "unknown")),
         confidence=str(data.get("confidence", "medium")),
+        evidence=[str(e) for e in evidence],
+        disproof=str(data.get("disproof", "")),
+        blast_radius=str(data.get("blast_radius", "unknown")),
         next_steps=[str(s) for s in steps],
     )
 
@@ -62,6 +68,9 @@ class StubBackend:
             root_cause="stub backend: deterministic placeholder hypothesis",
             severity="warning",
             confidence="low",
+            evidence=["stub backend does not read the collected context"],
+            disproof="enable a real LLM backend and compare the hypothesis",
+            blast_radius="single-pod",
             next_steps=["Enable a real LLM backend to get a real hypothesis."],
         )
 

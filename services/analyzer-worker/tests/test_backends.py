@@ -24,7 +24,10 @@ from app.ports import BackendError
 
 GOOD_JSON = (
     '{"root_cause": "container OOMKilled", "severity": "critical", '
-    '"confidence": "high", "next_steps": ["raise memory limit", "check for a leak"]}'
+    '"confidence": "high", "evidence": ["OOMKilling event", "memory at limit"], '
+    '"disproof": "check if memory usage was below the limit at the alert time", '
+    '"blast_radius": "single-pod", '
+    '"next_steps": ["raise memory limit", "check for a leak"]}'
 )
 
 
@@ -52,6 +55,13 @@ def test_parse_hypothesis_handles_code_fences_and_prose():
     h = parse_hypothesis(text)
     assert h.root_cause == "container OOMKilled"
     assert h.next_steps == ["raise memory limit", "check for a leak"]
+
+
+def test_parse_hypothesis_extracts_evidence_disproof_blast_radius():
+    h = parse_hypothesis(GOOD_JSON)
+    assert h.evidence == ["OOMKilling event", "memory at limit"]
+    assert "below the limit" in h.disproof
+    assert h.blast_radius == "single-pod"
 
 
 @pytest.mark.parametrize("bad", ["not json at all", "{}", '{"severity": "critical"}'])
