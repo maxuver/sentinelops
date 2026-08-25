@@ -10,3 +10,5 @@ data:
   SENTINELOPS_LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
   SENTINELOPS_COLLECTORS: {{ .Values.config.collectors | quote }}
   SENTINELOPS_NOTIFIER: {{ .Values.config.notifier | quote }}
+  SENTINELOPS_PROMETHEUS_URL: {{ .Values.config.prometheusUrl | quote }}
+  SENTINELOPS_LOKI_URL: {{ .Values.config.lokiUrl | quote }}

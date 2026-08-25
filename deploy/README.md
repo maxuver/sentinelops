@@ -49,6 +49,34 @@ kubectl auth can-i list pods     --as=$sa -A   # no  (events only)
 Set `rbac.clusterWide=false` to restrict reads to the release namespace instead
 of cluster-wide.
 
+## Full observability stack (real Prometheus + Loki)
+
+The k8s-events collector needs only the cluster API. To enrich with real metrics
+and logs, install a monitoring stack and point the analyzer at it:
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+helm upgrade --install kps prometheus-community/kube-prometheus-stack \
+  -n monitoring --create-namespace -f kind/values-monitoring.yaml
+helm upgrade --install loki grafana/loki-stack -n monitoring \
+  --set promtail.enabled=true
+
+# switch the analyzer to all three collectors, wired to the in-cluster services
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.collectors='k8s-events\,prometheus\,loki' \
+  --set config.prometheusUrl=http://kps-kube-prometheus-stack-prometheus.monitoring:9090 \
+  --set config.lokiUrl=http://loki.monitoring:3100
+kubectl -n sentinelops rollout restart deploy/so-analyzer-worker
+```
+
+Validated on kind: a crash-looping pod produced real BackOff events, real
+`kube_pod_container_status_restarts_total` / `container_memory_working_set_bytes`
+metrics, and real log lines shipped by Promtail, all collected by the three
+collectors and fed to the analyzer.
+
 ## Real LLM backend
 
 ```bash

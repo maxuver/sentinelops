@@ -18,6 +18,8 @@ config:
   llmProvider: stub
   collectors: k8s-events
   notifier: stub
+  prometheusUrl: http://localhost:9090
+  lokiUrl: http://localhost:3100
 
 # Read-only RBAC for the analyzer's Kubernetes-events collector.
 # clusterWide=true grants get/list/watch on events across all namespaces
