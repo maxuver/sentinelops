@@ -24,13 +24,23 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-config
-          {{- if eq .Values.config.llmProvider "anthropic" }}
+          {{- if or (eq .Values.config.llmProvider "anthropic") (eq .Values.config.notifier "telegram") }}
           env:
+            {{- if eq .Values.config.llmProvider "anthropic" }}
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-llm
                   key: anthropic-api-key
+            {{- end }}
+            {{- if eq .Values.config.notifier "telegram" }}
+            # Bot token comes from a Secret, never from values or the ConfigMap.
+            - name: SENTINELOPS_TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-telegram
+                  key: bot-token
+            {{- end }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

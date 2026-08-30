@@ -20,6 +20,9 @@ config:
   notifier: stub
   prometheusUrl: http://localhost:9090
   lokiUrl: http://localhost:3100
+  # Chat that receives incidents when notifier=telegram. The bot token is NOT
+  # here: it lives in a Secret (see deploy/README.md), never in values.
+  telegramChatId: ""
 
 # Read-only RBAC for the analyzer's Kubernetes-events collector.
 # clusterWide=true grants get/list/watch on events across all namespaces

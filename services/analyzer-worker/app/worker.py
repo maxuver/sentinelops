@@ -133,6 +133,11 @@ def build_worker(cfg: Settings = settings) -> Worker:  # pragma: no cover - wiri
 
 def main() -> None:  # pragma: no cover - process entrypoint
     logging.basicConfig(level=settings.log_level)
+    # httpx logs the full request URL at INFO, which would print the Telegram bot
+    # token into the pod logs. Anyone with `kubectl logs` could then take over the
+    # bot, so keep this client quiet regardless of our own log level.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     asyncio.run(build_worker().run())
 
 
