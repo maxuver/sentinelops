@@ -49,7 +49,11 @@ def load_scenario(path: Path) -> tuple[str, StreamAlert, ContextBundle]:
 
 
 async def run_scenario(
-    alert: StreamAlert, context: ContextBundle, backend, budget
+    alert: StreamAlert,
+    context: ContextBundle,
+    backend,
+    budget,
+    cfg: Settings = settings,
 ) -> Incident:
     analyzer = Analyzer(
         collector=ReplayCollector(context),
@@ -57,7 +61,9 @@ async def run_scenario(
         notifier=StubNotifier(),
         store=InMemoryStore(),
         budget=budget,
-        llm_timeout_seconds=settings.llm_timeout_seconds,
+        # Must come from the passed config, not the global settings: a caller
+        # benchmarking a slow local model needs its own timeout to apply.
+        llm_timeout_seconds=cfg.llm_timeout_seconds,
     )
     return await analyzer.analyze(alert)
 
@@ -68,7 +74,7 @@ async def run_all(scenarios_dir: Path = SCENARIOS_DIR, cfg: Settings = settings)
     results: list[Incident] = []
     for path in sorted(scenarios_dir.glob("*.json")):
         _name, alert, context = load_scenario(path)
-        results.append(await run_scenario(alert, context, backend, budget))
+        results.append(await run_scenario(alert, context, backend, budget, cfg))
     return results
 
 
