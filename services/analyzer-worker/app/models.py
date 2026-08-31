@@ -107,6 +107,7 @@ class IncidentStatus(str, Enum):
     ANALYZED = "analyzed"
     ANALYSIS_FAILED = "analysis_failed"
     BUDGET_EXCEEDED = "budget_exceeded"
+    DUPLICATE_SUPPRESSED = "duplicate_suppressed"
 
 
 class Incident(BaseModel):

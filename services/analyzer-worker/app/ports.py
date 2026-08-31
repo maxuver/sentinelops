@@ -43,6 +43,11 @@ class Budget(Protocol):
     async def add(self, usd: float) -> None: ...
 
 
+@runtime_checkable
+class Deduplicator(Protocol):
+    async def is_duplicate(self, alert: StreamAlert) -> bool: ...
+
+
 class BackendError(RuntimeError):
     """Raised by an LLM backend when it cannot produce a hypothesis.
 

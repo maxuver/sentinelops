@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     # Per-UTC-day spend cap; on exhaustion the pipeline degrades to raw delivery.
     daily_budget_usd: float = 5.00
 
+    # --- deduplication ---
+    # Alertmanager re-sends a firing alert every repeat_interval. Analysing the
+    # same fingerprint again costs money and spams the engineer, so suppress
+    # repeats inside this window (default 1h, matching a typical repeat_interval).
+    dedup_window_seconds: int = 3600
+
     # --- persistence (ADR-0002: only post-redaction data is stored) ---
     store: str = "memory"  # "memory" | "postgres"
     postgres_dsn: str = "postgresql://sentinel:sentinel@localhost:5432/sentinelops"

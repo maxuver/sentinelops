@@ -20,7 +20,7 @@ import logging
 import time
 
 from .models import Incident, IncidentStatus, StreamAlert
-from .ports import Budget, Collector, IncidentStore, LLMBackend, Notifier
+from .ports import Budget, Collector, Deduplicator, IncidentStore, LLMBackend, Notifier
 from .prompt import build_prompt
 from .redaction import redact_bundle
 
@@ -36,6 +36,7 @@ class Analyzer:
         store: IncidentStore,
         budget: Budget,
         llm_timeout_seconds: float = 30.0,
+        deduplicator: Deduplicator | None = None,
     ) -> None:
         self._collector = collector
         self._backend = backend
@@ -43,6 +44,7 @@ class Analyzer:
         self._store = store
         self._budget = budget
         self._timeout = llm_timeout_seconds
+        self._dedup = deduplicator
 
     async def analyze(self, alert: StreamAlert) -> Incident:
         incident = Incident(
@@ -53,6 +55,13 @@ class Analyzer:
             alert_summary=alert.summary(),
             backend=self._backend.name,
         )
+
+        # Suppress a repeat of an alert already handled in this window. Checked
+        # first, so a duplicate costs no collector calls and no LLM spend.
+        if self._dedup is not None and await self._dedup.is_duplicate(alert):
+            incident.status = IncidentStatus.DUPLICATE_SUPPRESSED
+            logger.info("suppressed duplicate alert=%s fp=%s", alert.alertname, alert.fingerprint)
+            return incident
 
         # Collect and redact BEFORE anything leaves the process.
         raw_context = await self._collector.collect(alert)

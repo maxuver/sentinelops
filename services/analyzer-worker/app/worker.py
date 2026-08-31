@@ -116,17 +116,19 @@ def build_worker(cfg: Settings = settings) -> Worker:  # pragma: no cover - wiri
     from .backends import get_backend
     from .budget import get_budget
     from .collectors import get_collector
+    from .dedup import get_deduplicator
     from .notifiers import get_notifier
     from .stores import get_store
 
     redis_client = redis.from_url(cfg.redis_url, decode_responses=True)
     analyzer = Analyzer(
-        collector=get_collector(),
+        collector=get_collector(cfg),
         backend=get_backend(cfg),
         notifier=get_notifier(cfg),
         store=get_store(cfg),
         budget=get_budget(redis_client, cfg),
         llm_timeout_seconds=cfg.llm_timeout_seconds,
+        deduplicator=get_deduplicator(redis_client, cfg),
     )
     return Worker(redis_client, analyzer, cfg)
 
