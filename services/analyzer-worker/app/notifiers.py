@@ -5,35 +5,84 @@ was exhausted — the engineer must always receive the alert essentials, with th
 hypothesis as an overlay when present (ADR-0003). Raw-alert-first-on-ingest is a
 separate ingest-api responsibility; this notifier guarantees the worker never
 swallows an alert even when the model is unavailable.
+
+Messages are formatted as Telegram HTML rather than MarkdownV2: MarkdownV2 needs
+a dozen characters escaped, and log lines and model output are full of them.
+HTML needs only &, < and >, so it is far harder to break with real content.
 """
 
 from __future__ import annotations
 
+from html import escape
+
 from .config import Settings, settings
 from .models import Incident, IncidentStatus
 
+_SEVERITY_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
+
+
+def _icon(severity: str) -> str:
+    return _SEVERITY_ICON.get(severity.lower(), "⚪")
+
 
 def format_message(incident: Incident) -> str:
-    lines = [f"🛎  {incident.alert_summary or incident.alertname}"]
+    """Render the incident as Telegram-flavoured HTML."""
+    head = f"{_icon(incident.severity)} <b>{escape(incident.alertname or 'Alert')}</b>"
+
+    where = " · ".join(
+        escape(p)
+        for p in (incident.namespace, incident.severity)
+        if p and p != "unknown"
+    )
+    lines = [head]
+    if where:
+        lines.append(f"<i>{where}</i>")
+
     if incident.status is IncidentStatus.ANALYZED and incident.hypothesis:
         h = incident.hypothesis
         lines.append("")
-        lines.append(f"🤖 Likely cause ({h.confidence} confidence): {h.root_cause}")
+        lines.append(f"🤖 <b>Likely cause</b> <i>({escape(h.confidence)} confidence)</i>")
+        lines.append(escape(h.root_cause))
+
         if h.blast_radius and h.blast_radius != "unknown":
-            lines.append(f"Blast radius: {h.blast_radius}")
+            lines.append("")
+            lines.append(f"💥 <b>Blast radius:</b> <code>{escape(h.blast_radius)}</code>")
+
         if h.evidence:
-            lines.append("Evidence:")
-            lines.extend(f"  - {e}" for e in h.evidence)
+            lines.append("")
+            lines.append("📋 <b>Evidence</b>")
+            lines.extend(f"• <code>{escape(e)}</code>" for e in h.evidence)
+
         if h.disproof:
-            lines.append(f"Cheapest way to disprove: {h.disproof}")
+            lines.append("")
+            lines.append("🎯 <b>Cheapest way to disprove</b>")
+            lines.append(f"<i>{escape(h.disproof)}</i>")
+
         if h.next_steps:
-            lines.append("Next steps:")
-            lines.extend(f"  {i}. {s}" for i, s in enumerate(h.next_steps, 1))
-        lines.append(f"— {incident.backend}, {incident.latency_ms} ms, ${incident.cost_usd:.4f}")
+            lines.append("")
+            lines.append("✅ <b>Next steps</b>")
+            lines.extend(
+                f"{i}. {escape(s)}" for i, s in enumerate(h.next_steps, 1)
+            )
+
+        lines.append("")
+        lines.append(
+            f"<i>⏱ {escape(incident.backend)} · {incident.latency_ms} ms · "
+            f"${incident.cost_usd:.4f}</i>"
+        )
+
     elif incident.status is IncidentStatus.BUDGET_EXCEEDED:
-        lines.append("⚠️ AI analysis skipped: daily budget reached. Raw alert only.")
+        lines.append("")
+        lines.append("⚠️ <b>AI analysis skipped</b> — daily budget reached.")
+        lines.append("<i>Raw alert delivered as usual.</i>")
+
     else:
-        lines.append(f"⚠️ AI analysis unavailable ({incident.failure_reason}). Raw alert only.")
+        lines.append("")
+        lines.append("⚠️ <b>AI analysis unavailable</b>")
+        if incident.failure_reason:
+            lines.append(f"<code>{escape(incident.failure_reason[:200])}</code>")
+        lines.append("<i>Raw alert delivered as usual.</i>")
+
     return "\n".join(lines)
 
 
@@ -66,7 +115,12 @@ class TelegramNotifier:
         try:
             resp = await client.post(
                 url,
-                json={"chat_id": self._cfg.telegram_chat_id, "text": format_message(incident)},
+                json={
+                    "chat_id": self._cfg.telegram_chat_id,
+                    "text": format_message(incident),
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                },
             )
             resp.raise_for_status()
         finally:

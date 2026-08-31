@@ -80,4 +80,4 @@ async def test_full_pipeline_degrades_when_budget_gone(cfg, raw_payload):
     # The engineer still gets the raw alert — analysis is an overlay, not a gate.
     msg = format_message(incident)
     assert "KubePodCrashLooping" in msg
-    assert "Raw alert only" in msg
+    assert "Raw alert delivered" in msg
