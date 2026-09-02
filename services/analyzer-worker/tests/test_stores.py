@@ -44,7 +44,14 @@ def _incident():
         namespace="demo",
         severity="warning",
         status=IncidentStatus.ANALYZED,
-        hypothesis=Hypothesis(root_cause="OOMKilled", confidence="high", blast_radius="single-pod"),
+        hypothesis=Hypothesis(
+            root_cause="OOMKilled",
+            confidence="high",
+            blast_radius="single-pod",
+            evidence=["OOMKilling event x3"],
+            disproof="check memory below limit at alert time",
+            next_steps=["raise the limit"],
+        ),
         backend="stub",
         cost_usd=0.006,
         latency_ms=42,
@@ -64,6 +71,11 @@ async def test_postgres_store_creates_schema_then_inserts():  # CC-29
     assert "KubePodCrashLooping" in args  # alertname persisted
     assert "OOMKilled" in args  # hypothesis root_cause persisted
     assert 0.006 in args  # cost recorded
+    # the useful half of a hypothesis must survive too, or the incident
+    # history and the UI lose the evidence and the disproof
+    assert ["OOMKilling event x3"] in args
+    assert "check memory below limit at alert time" in args
+    assert ["raise the limit"] in args
 
 
 async def test_postgres_store_creates_schema_only_once():
@@ -73,6 +85,8 @@ async def test_postgres_store_creates_schema_only_once():
     await store.save(_incident())
     creates = [c for c in pool.conn.calls if "CREATE TABLE" in c[0]]
     assert len(creates) == 1  # schema ensured once, not per save
+    alters = [c for c in pool.conn.calls if "ADD COLUMN IF NOT EXISTS" in c[0]]
+    assert alters, "column migrations must run so an existing table gains them"
 
 
 async def test_failed_incident_persists_without_hypothesis():

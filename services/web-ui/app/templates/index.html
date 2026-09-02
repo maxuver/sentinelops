@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SentinelOps — incidents</title>
+<style>
+  :root {
+    --bg:#0A0C10; --surface:#12151C; --border:#232833;
+    --text:#E6E9EF; --dim:#9AA4B2; --accent:#4C8DFF;
+    --ok:#3FBF7F; --warn:#F0A93B; --danger:#E5534B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.6 Inter, system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width:1150px; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; letter-spacing:-.01em; }
+  .sub { color:var(--dim); font-size:.875rem; margin:0 0 2rem; }
+  .stats { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1.5rem; }
+  .stat {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; padding:.75rem 1rem; min-width:120px;
+  }
+  .stat b { display:block; font-size:1.35rem; font-weight:600; }
+  .stat span { color:var(--dim); font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; }
+  form { display:flex; gap:.6rem; flex-wrap:wrap; margin-bottom:1.25rem; }
+  select, button {
+    background:var(--surface); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:.45rem .7rem; font:inherit; font-size:.875rem;
+  }
+  button { border-color:var(--accent); color:var(--accent); cursor:pointer; }
+  details {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; margin-bottom:.6rem; overflow:hidden;
+  }
+  summary {
+    cursor:pointer; padding:.85rem 1rem; display:grid; gap:.75rem;
+    grid-template-columns: 10px 1fr auto auto; align-items:center;
+  }
+  summary::-webkit-details-marker { display:none; }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .sev-critical { background:var(--danger); }
+  .sev-warning  { background:var(--warn); }
+  .sev-info     { background:var(--accent); }
+  .sev-unknown  { background:var(--dim); }
+  .name { font-weight:600; }
+  .meta { color:var(--dim); font-size:.8125rem; font-weight:400; }
+  .pill {
+    font-size:.6875rem; padding:.15rem .5rem; border-radius:999px;
+    border:1px solid var(--border); color:var(--dim); white-space:nowrap;
+  }
+  .pill.analyzed { color:var(--ok); border-color:var(--ok); }
+  .pill.analysis_failed { color:var(--danger); border-color:var(--danger); }
+  .pill.budget_exceeded { color:var(--warn); border-color:var(--warn); }
+  .body { padding:0 1rem 1rem; border-top:1px solid var(--border); }
+  .body h3 {
+    font-size:.6875rem; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--dim); margin:1.1rem 0 .35rem; font-weight:600;
+  }
+  code, .mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size:.8125rem;
+  }
+  ul { margin:.2rem 0; padding-left:1.1rem; }
+  li { margin:.2rem 0; }
+  .footer-line { color:var(--dim); font-size:.8125rem; margin-top:1.1rem; }
+  .empty { color:var(--dim); padding:3rem 0; text-align:center; }
+  .warn-banner {
+    background:rgba(240,169,59,.08); border:1px solid var(--warn);
+    color:var(--warn); border-radius:8px; padding:.6rem .9rem;
+    font-size:.8125rem; margin-bottom:1.5rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Incident history</h1>
+  <p class="sub">What SentinelOps concluded, and the evidence behind it.</p>
+
+  <div class="warn-banner">
+    Read-only view with no authentication. Keep it inside the cluster and reach
+    it with <code>kubectl port-forward</code>.
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>{{ summary.total }}</b><span>incidents</span></div>
+    <div class="stat"><b>{{ summary.by_status.get("analyzed", 0) }}</b><span>analyzed</span></div>
+    <div class="stat"><b>{{ summary.by_status.get("analysis_failed", 0) }}</b><span>failed</span></div>
+    <div class="stat"><b>${{ "%.4f"|format(summary.cost) }}</b><span>total cost</span></div>
+  </div>
+
+  <form method="get">
+    <select name="namespace">
+      <option value="">all namespaces</option>
+      {% for ns in namespaces %}
+      <option value="{{ ns }}" {% if ns == selected_namespace %}selected{% endif %}>{{ ns }}</option>
+      {% endfor %}
+    </select>
+    <select name="status">
+      <option value="">all statuses</option>
+      {% for s in ["analyzed", "analysis_failed", "budget_exceeded", "duplicate_suppressed"] %}
+      <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  {% if not incidents %}
+    <p class="empty">No incidents yet. Once an alert is analysed it appears here.</p>
+  {% endif %}
+
+  {% for i in incidents %}
+  <details>
+    <summary>
+      <span class="dot sev-{{ i.severity or 'unknown' }}"></span>
+      <span>
+        <span class="name">{{ i.alertname }}</span>
+        <span class="meta">{{ i.namespace }}{% if i.root_cause %} — {{ i.root_cause[:80] }}{% endif %}</span>
+      </span>
+      <span class="pill {{ i.status }}">{{ i.status }}</span>
+      <span class="meta mono">{{ i.created_at.strftime("%d %b %H:%M") if i.created_at else "" }}</span>
+    </summary>
+    <div class="body">
+      {% if i.root_cause %}
+        <h3>Likely cause{% if i.confidence %} · {{ i.confidence }} confidence{% endif %}</h3>
+        <div>{{ i.root_cause }}</div>
+      {% endif %}
+
+      {% if i.blast_radius and i.blast_radius != "unknown" %}
+        <h3>Blast radius</h3>
+        <code>{{ i.blast_radius }}</code>
+      {% endif %}
+
+      {% if i.evidence %}
+        <h3>Evidence</h3>
+        <ul>{% for e in i.evidence %}<li class="mono">{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if i.disproof %}
+        <h3>Cheapest way to disprove</h3>
+        <div>{{ i.disproof }}</div>
+      {% endif %}
+
+      {% if i.next_steps %}
+        <h3>Next steps</h3>
+        <ul>{% for s in i.next_steps %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if i.failure_reason %}
+        <h3>Why analysis did not run</h3>
+        <code>{{ i.failure_reason }}</code>
+      {% endif %}
+
+      <div class="footer-line mono">
+        {{ i.backend }} · {{ i.latency_ms }} ms · ${{ "%.4f"|format(i.cost_usd or 0) }}
+      </div>
+    </div>
+  </details>
+  {% endfor %}
+</div>
+</body>
+</html>

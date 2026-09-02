@@ -1,0 +1,66 @@
+{{- if and (eq .Values.config.store "postgres") .Values.webUi.enabled }}
+# Read-only incident history. Rendered only when incidents are actually stored,
+# because there is nothing to read otherwise.
+#
+# SECURITY: no authentication in this iteration. The Service is deliberately
+# ClusterIP — reach it with `kubectl port-forward`, do not expose it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web-ui
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: web-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: web-ui
+    spec:
+      containers:
+        - name: web-ui
+          image: {{ .Values.images.webUi }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SENTINELOPS_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-dsn
+                  key: dsn
+            - name: SENTINELOPS_LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web-ui
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP # intentionally not exposed; see the security note above
+  selector:
+    app.kubernetes.io/component: web-ui
+  ports:
+    - port: 8080
+      targetPort: 8080
+{{- end }}

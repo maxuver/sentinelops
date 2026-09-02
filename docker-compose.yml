@@ -48,3 +48,13 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+
+  web-ui:
+    build: services/web-ui
+    environment:
+      SENTINELOPS_POSTGRES_DSN: postgresql://sentinel:sentinel@postgres:5432/sentinelops
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy

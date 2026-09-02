@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS incidents (
     root_cause     TEXT,
     confidence     TEXT,
     blast_radius   TEXT,
+    evidence       TEXT[],
+    disproof       TEXT,
+    next_steps     TEXT[],
     backend        TEXT,
     cost_usd       DOUBLE PRECISION,
     latency_ms     INTEGER,
@@ -33,12 +36,25 @@ CREATE TABLE IF NOT EXISTS incidents (
 )
 """
 
+# Added after the first release, so an existing table gets them too rather than
+# silently dropping the most useful part of a hypothesis.
+_MIGRATIONS = (
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS evidence TEXT[]",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS disproof TEXT",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS next_steps TEXT[]",
+)
+
+_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS incidents_created_at_idx ON incidents (created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS incidents_namespace_idx ON incidents (namespace)",
+)
+
 _INSERT = """
 INSERT INTO incidents (
     id, fingerprint, alertname, namespace, severity, status,
-    root_cause, confidence, blast_radius, backend, cost_usd,
-    latency_ms, failure_reason, created_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+    root_cause, confidence, blast_radius, evidence, disproof, next_steps,
+    backend, cost_usd, latency_ms, failure_reason, created_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 ON CONFLICT (id) DO NOTHING
 """
 
@@ -76,6 +92,8 @@ class PostgresStore:
         async with pool.acquire() as conn:
             if not self._schema_ready:
                 await conn.execute(_SCHEMA)
+                for statement in _MIGRATIONS + _INDEXES:
+                    await conn.execute(statement)
                 self._schema_ready = True
             await conn.execute(
                 _INSERT,
@@ -88,6 +106,9 @@ class PostgresStore:
                 h.root_cause if h else None,
                 h.confidence if h else None,
                 h.blast_radius if h else None,
+                h.evidence if h else None,
+                h.disproof if h else None,
+                h.next_steps if h else None,
                 incident.backend,
                 incident.cost_usd,
                 incident.latency_ms,

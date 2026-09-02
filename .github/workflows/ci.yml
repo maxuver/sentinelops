@@ -38,12 +38,29 @@ jobs:
       - run: ruff check app tests
       - run: pytest -q
 
+  web-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/web-ui/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check app tests
+      - run: pytest -q
+
   docker-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build services/ingest-api
       - run: docker build services/analyzer-worker
+      - run: docker build services/web-ui
 
   helm:
     runs-on: ubuntu-latest
@@ -62,7 +79,8 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit pip-audit
       # SAST: static analysis of our own source for security bugs.
-      - run: bandit -r services/ingest-api/app services/analyzer-worker/app
+      - run: bandit -r services/ingest-api/app services/analyzer-worker/app services/web-ui/app
       # SCA: scan dependencies for known CVEs.
       - run: pip-audit -r services/ingest-api/requirements.txt
       - run: pip-audit -r services/analyzer-worker/requirements.txt
+      - run: pip-audit -r services/web-ui/requirements.txt
