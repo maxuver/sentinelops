@@ -13,3 +13,4 @@ data:
   SENTINELOPS_PROMETHEUS_URL: {{ .Values.config.prometheusUrl | quote }}
   SENTINELOPS_LOKI_URL: {{ .Values.config.lokiUrl | quote }}
   SENTINELOPS_TELEGRAM_CHAT_ID: {{ .Values.config.telegramChatId | quote }}
+  SENTINELOPS_STORE: {{ .Values.config.store | quote }}
