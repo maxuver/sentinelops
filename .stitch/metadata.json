@@ -1,0 +1,23 @@
+{
+  "_comment": "Populated by the Stitch Build Loop. projectId is empty until the first run: connect the Stitch MCP server, call create_project, then get_project, and write the real values here. Do not hand-edit the screens map afterwards - the loop rewrites it after every generated screen.",
+  "name": "",
+  "projectId": "",
+  "title": "SentinelOps Landing",
+  "visibility": "PRIVATE",
+  "createTime": "",
+  "updateTime": "",
+  "projectType": "PROJECT_DESIGN",
+  "origin": "STITCH",
+  "deviceType": "DESKTOP",
+  "designTheme": {
+    "colorMode": "DARK",
+    "font": "INTER",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#4C8DFF",
+    "saturation": 2
+  },
+  "screens": {},
+  "metadata": {
+    "userRole": "OWNER"
+  }
+}

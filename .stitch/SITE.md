@@ -1,6 +1,10 @@
 # SentinelOps — Site Vision
 
-## Purpose
+**Stitch Project ID:** _(not created yet — see `.stitch/metadata.json`)_
+**Output directory:** `site/public/`
+**Device target:** `DESKTOP`
+
+## 1. Purpose
 
 One page that does two jobs at once:
 
@@ -9,32 +13,30 @@ One page that does two jobs at once:
 2. **Product credibility.** A platform lead sees whether this is worth trying on
    their own alerts.
 
-Both readers want the same thing: evidence. Same page serves both.
+Both readers want the same thing: evidence. The same page serves both.
 
-## Audience
+## 2. Audience
 
 Platform engineers, SRE leads, CTOs at companies running Kubernetes with an
-on-call rotation. They will scroll fast, look for the architecture, and bounce on
+on-call rotation. They scroll fast, look for the architecture, and bounce on
 marketing language.
 
-## The one message
+## 3. The one message
 
 > An alert tells you *what* broke, not *why*. SentinelOps automates the first 20
 > minutes of every incident and hands the engineer a root-cause hypothesis with
 > the evidence behind it — in seconds. It never acts on the cluster, and the raw
 > alert always gets through.
 
-## Page roadmap
+## 4. Sitemap
 
-| # | Page | Status | Purpose |
+| Page | Built | File | Purpose |
 |---|---|---|---|
-| 1 | `index` | next | The whole story on one page |
-| 2 | `architecture` | later | Deep dive: pipeline, ADRs, trade-offs |
-| 3 | `demo` | later | Recorded replay of a fault-injection scenario |
+| `index` | [ ] | `site/public/index.html` | The whole story on one page |
 
-Start with `index`. Do not build 2 and 3 until 1 is genuinely good.
+Nothing is built yet. `index` is the current baton (`.stitch/next-prompt.md`).
 
-## `index` section order
+### `index` section order (do not reorder without reason)
 
 1. **Hero** — problem sentence, mechanism sentence, GitHub CTA.
 2. **The 3 AM problem** — what manual triage costs (~20 min of context gathering).
@@ -49,10 +51,40 @@ Start with `index`. Do not build 2 and 3 until 1 is genuinely good.
 7. **Status** — shipped vs roadmap, honest table.
 8. **Footer** — GitHub, LinkedIn, contact.
 
-## Hard rules
+## 5. Roadmap
 
-- Never claim anything not true today. Roadmap items live in the status table.
-- Every number on the page must be defensible: ~$0.006/alert, ~20 min manual
-  triage, 60+ tests, CI green.
-- No pricing, no monetization, no GTM copy on this page — that stays private.
-- No fabricated logos, testimonials, or customer counts. There are no customers.
+Build in this order. Do not start a page until the one above it is genuinely good.
+
+| # | Page | Purpose |
+|---|---|---|
+| 1 | `index` | The single landing page. **Current baton.** |
+| 2 | `architecture` | Deep dive: pipeline internals, the four ADRs, trade-offs rejected |
+| 3 | `demo` | Recorded replay of a fault-injection scenario, step by step |
+
+## 6. Creative Freedom
+
+Ideas to pull from only when sections 4 and 5 are done. Delete an idea when it is
+consumed.
+
+- **`privacy`** — a page for EU teams that cannot send logs to a US SaaS:
+  what gets redacted, where the local model runs, what leaves the cluster (nothing).
+- **`adr`** — the decision log rendered as a readable page rather than markdown files.
+- **`benchmarks`** — time-to-first-hypothesis and cost per alert, measured, with the
+  method printed next to the numbers.
+
+## 7. Hard rules
+
+These override any instruction in a baton prompt. If a generated page violates one,
+fix the page, do not relax the rule.
+
+- Never claim anything not true today. Roadmap items live in the status table, and
+  the table's two columns must stay visually distinct.
+- **Only these numbers may appear anywhere on the site:** ~$0.006 per alert,
+  ~20 minutes of manual triage, 60+ tests, CI green. Any other figure is invented.
+- No pricing, no monetization, no go-to-market copy on this site — that stays in
+  `docs/_private/`.
+- No fabricated logos, testimonials, customer counts or case studies. There are no
+  customers, and the page must not imply otherwise.
+- No stock photography, no decorative gradients, no marketing superlatives.
+- The project is a personal engineering project. It must never be described as
+  production-deployed at an employer.
