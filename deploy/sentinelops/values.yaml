@@ -9,6 +9,17 @@ images:
 redis:
   image: redis:7-alpine
 
+# Incident history. Enabled by setting config.store=postgres.
+# Set deploy=false to use an existing/managed database instead — then the DSN is
+# read from the so-postgres-dsn Secret (see deploy/README.md).
+postgres:
+  deploy: true
+  image: postgres:16-alpine
+  user: sentinel
+  database: sentinelops
+  password: sentinel # demo default; override in any real deployment
+  storage: 2Gi
+
 # Runtime configuration (SENTINELOPS_* env). Safe offline defaults: the stub
 # backend needs no API key, and the k8s-events collector reads live cluster
 # events. Switch llmProvider to "anthropic" (+ apiKeySecret) or "ollama", and
@@ -18,6 +29,8 @@ config:
   llmProvider: stub
   collectors: k8s-events
   notifier: stub
+  # memory | postgres. postgres stores the incident history (redacted only).
+  store: memory
   prometheusUrl: http://localhost:9090
   lokiUrl: http://localhost:3100
   # Chat that receives incidents when notifier=telegram. The bot token is NOT
