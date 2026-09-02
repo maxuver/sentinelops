@@ -97,6 +97,36 @@ kubectl -n sentinelops logs deploy/so-analyzer-worker | grep 'incident alert'
 Validated on kind: pod restarts -> KubePodCrashLoopingFast fires -> Alertmanager
 webhook -> `{"queued":1}` -> analyzer incident, end to end.
 
+## Delivery: Slack or Telegram
+
+Both channels render the same content: cause, evidence, the cheapest way to
+disprove it, blast radius and next steps.
+
+**Slack** uses an Incoming Webhook, so the only thing to set up is one URL
+(api.slack.com → your app → Incoming Webhooks → Add New Webhook to Workspace).
+No OAuth app to install, no scopes for a security team to review.
+
+```bash
+kubectl -n sentinelops create secret generic so-slack \
+  --from-literal=webhook-url='https://hooks.slack.com/services/T.../B.../...'
+
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.notifier=slack
+```
+
+**Telegram** needs a bot token from @BotFather and the target chat id:
+
+```bash
+kubectl -n sentinelops create secret generic so-telegram \
+  --from-literal=bot-token='123456:ABC...'
+
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.notifier=telegram --set config.telegramChatId=123456789
+```
+
+Neither credential ever goes into `values.yaml` or the ConfigMap. A Slack
+webhook URL *is* the credential — anyone holding it can post to the channel.
+
 ## Real LLM backend
 
 ```bash

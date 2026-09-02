@@ -57,9 +57,12 @@ class Settings(BaseSettings):
     postgres_dsn: str = "postgresql://sentinel:sentinel@localhost:5432/sentinelops"
 
     # --- delivery ---
-    notifier: str = "stub"  # "telegram" | "stub"
+    notifier: str = "stub"  # "telegram" | "slack" | "stub"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # Slack Incoming Webhook URL. One pasted URL is all a customer needs:
+    # no OAuth app, no bot token, no scopes to review.
+    slack_webhook_url: str = ""
 
     log_level: str = "INFO"
 

@@ -6,9 +6,10 @@ hypothesis as an overlay when present (ADR-0003). Raw-alert-first-on-ingest is a
 separate ingest-api responsibility; this notifier guarantees the worker never
 swallows an alert even when the model is unavailable.
 
-Messages are formatted as Telegram HTML rather than MarkdownV2: MarkdownV2 needs
-a dozen characters escaped, and log lines and model output are full of them.
-HTML needs only &, < and >, so it is far harder to break with real content.
+Two channels, same content. Telegram is rendered as HTML rather than MarkdownV2
+(MarkdownV2 needs a dozen characters escaped and log lines are full of them),
+Slack as Block Kit. Both escape &, < and >, so a log line or model output can
+neither break the rendering nor inject markup.
 """
 
 from __future__ import annotations
@@ -25,18 +26,22 @@ def _icon(severity: str) -> str:
     return _SEVERITY_ICON.get(severity.lower(), "⚪")
 
 
+def _where(incident: Incident) -> str:
+    return " · ".join(
+        p for p in (incident.namespace, incident.severity) if p and p != "unknown"
+    )
+
+
+# --- Telegram ---------------------------------------------------------------
+
+
 def format_message(incident: Incident) -> str:
     """Render the incident as Telegram-flavoured HTML."""
-    head = f"{_icon(incident.severity)} <b>{escape(incident.alertname or 'Alert')}</b>"
-
-    where = " · ".join(
-        escape(p)
-        for p in (incident.namespace, incident.severity)
-        if p and p != "unknown"
-    )
-    lines = [head]
+    name = escape(incident.alertname or "Alert")
+    lines = [f"{_icon(incident.severity)} <b>{name}</b>"]
+    where = _where(incident)
     if where:
-        lines.append(f"<i>{where}</i>")
+        lines.append(f"<i>{escape(where)}</i>")
 
     if incident.status is IncidentStatus.ANALYZED and incident.hypothesis:
         h = incident.hypothesis
@@ -61,9 +66,7 @@ def format_message(incident: Incident) -> str:
         if h.next_steps:
             lines.append("")
             lines.append("✅ <b>Next steps</b>")
-            lines.extend(
-                f"{i}. {escape(s)}" for i, s in enumerate(h.next_steps, 1)
-            )
+            lines.extend(f"{i}. {escape(s)}" for i, s in enumerate(h.next_steps, 1))
 
         lines.append("")
         lines.append(
@@ -84,6 +87,74 @@ def format_message(incident: Incident) -> str:
         lines.append("<i>Raw alert delivered as usual.</i>")
 
     return "\n".join(lines)
+
+
+# --- Slack ------------------------------------------------------------------
+# Slack mrkdwn reserves &, < and > for entities and links, so the same three
+# characters need escaping as in HTML, but inside Slack's own block structure.
+
+
+def _slack_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _section(text: str) -> dict:
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+
+def format_slack_blocks(incident: Incident) -> list[dict]:
+    """Render the incident as Slack Block Kit."""
+    esc = _slack_escape
+    title = f"{_icon(incident.severity)} {incident.alertname or 'Alert'}"
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": title[:150]}}
+    ]
+
+    where = _where(incident)
+    if where:
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": esc(where)}]})
+
+    if incident.status is IncidentStatus.ANALYZED and incident.hypothesis:
+        h = incident.hypothesis
+        blocks.append(
+            _section(f"*Likely cause* _({esc(h.confidence)} confidence)_\n{esc(h.root_cause)}")
+        )
+        if h.blast_radius and h.blast_radius != "unknown":
+            blocks.append(_section(f"*Blast radius*  `{esc(h.blast_radius)}`"))
+        if h.evidence:
+            bullets = "\n".join(f"• `{esc(e)}`" for e in h.evidence)
+            blocks.append(_section(f"*Evidence*\n{bullets}"))
+        if h.disproof:
+            blocks.append(_section(f"*Cheapest way to disprove*\n_{esc(h.disproof)}_"))
+        if h.next_steps:
+            steps = "\n".join(f"{i}. {esc(s)}" for i, s in enumerate(h.next_steps, 1))
+            blocks.append(_section(f"*Next steps*\n{steps}"))
+        blocks.append({"type": "divider"})
+        footer = (
+            f"{esc(incident.backend)} · {incident.latency_ms} ms · "
+            f"${incident.cost_usd:.4f}"
+        )
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": footer}]})
+
+    elif incident.status is IncidentStatus.BUDGET_EXCEEDED:
+        blocks.append(
+            _section(
+                "*AI analysis skipped* — daily budget reached."
+                "\n_Raw alert delivered as usual._"
+            )
+        )
+
+    else:
+        reason = esc(incident.failure_reason or "")[:200]
+        tail = f"\n`{reason}`" if reason else ""
+        blocks.append(
+            _section(f"*AI analysis unavailable*{tail}\n_Raw alert delivered as usual._")
+        )
+
+    return blocks
+
+
+# --- adapters ---------------------------------------------------------------
 
 
 class StubNotifier:
@@ -128,7 +199,43 @@ class TelegramNotifier:
                 await client.aclose()
 
 
+class SlackNotifier:
+    """Posts the incident to a Slack Incoming Webhook.
+
+    A webhook rather than the Bot API on purpose: the customer pastes one URL,
+    with no OAuth app to create and no scopes for their security team to review.
+    """
+
+    name = "slack"
+
+    def __init__(self, cfg: Settings = settings, client=None) -> None:
+        self._cfg = cfg
+        self._client = client  # inject an httpx.AsyncClient in tests
+
+    async def notify(self, incident: Incident) -> None:
+        import httpx
+
+        client = self._client or httpx.AsyncClient(timeout=10.0)
+        try:
+            resp = await client.post(
+                self._cfg.slack_webhook_url,
+                json={
+                    # `text` is the fallback shown in the sidebar and in mobile
+                    # push notifications; `blocks` is the rich body.
+                    "text": f"{incident.alertname}: {incident.status.value}",
+                    "blocks": format_slack_blocks(incident),
+                },
+            )
+            resp.raise_for_status()
+        finally:
+            if self._client is None:
+                await client.aclose()
+
+
 def get_notifier(cfg: Settings = settings):
-    if cfg.notifier.lower() == "telegram":
+    channel = cfg.notifier.lower()
+    if channel == "telegram":
         return TelegramNotifier(cfg)
+    if channel == "slack":
+        return SlackNotifier(cfg)
     return StubNotifier()

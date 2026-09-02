@@ -24,7 +24,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-config
-          {{- if or (eq .Values.config.llmProvider "anthropic") (eq .Values.config.notifier "telegram") (eq .Values.config.store "postgres") }}
+          {{- if or (eq .Values.config.llmProvider "anthropic") (eq .Values.config.notifier "telegram") (eq .Values.config.notifier "slack") (eq .Values.config.store "postgres") }}
           env:
             {{- if eq .Values.config.store "postgres" }}
             # The DSN carries a password, so it lives in a Secret, not the ConfigMap.
@@ -40,6 +40,15 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-llm
                   key: anthropic-api-key
+            {{- end }}
+            {{- if eq .Values.config.notifier "slack" }}
+            # An Incoming Webhook URL is itself the credential: anyone holding it
+            # can post to the channel, so it belongs in a Secret, not the ConfigMap.
+            - name: SENTINELOPS_SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-slack
+                  key: webhook-url
             {{- end }}
             {{- if eq .Values.config.notifier "telegram" }}
             # Bot token comes from a Secret, never from values or the ConfigMap.
