@@ -1,0 +1,38 @@
+{
+  "name": "errors-from-deploy",
+  "why_hard": "The logs are full of database timeouts, which points at the database. The database is healthy: connections and query latency are normal. A rollout finished three minutes before the error rate rose, and only the new ReplicaSet is failing.",
+  "expected_keywords": ["deploy", "rollout", "release", "new version", "v2.4", "replicaset"],
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "HighErrorRate",
+      "namespace": "demo",
+      "service": "payments-api",
+      "severity": "critical"
+    },
+    "annotations": {
+      "description": "payments-api is returning 5xx for more than 5% of requests.",
+      "summary": "High error rate."
+    },
+    "startsAt": "2026-09-02T14:22:09Z",
+    "fingerprint": "h3c4d5e6f7081920"
+  },
+  "context": {
+    "k8s_events": [
+      "Normal ScalingReplicaSet deployment/payments-api: Scaled up replica set payments-api-v2-4 to 3",
+      "Normal ScalingReplicaSet deployment/payments-api: Scaled down replica set payments-api-v2-3 to 0"
+    ],
+    "metrics": [
+      "sum(rate(http_requests_total{service=\"payments-api\",code=~\"5..\"}[5m])) = 41.7",
+      "sum(rate(http_requests_total{service=\"payments-api\",replicaset=\"payments-api-v2-3\",code=~\"5..\"}[5m])) = 0",
+      "sum(rate(http_requests_total{service=\"payments-api\",replicaset=\"payments-api-v2-4\",code=~\"5..\"}[5m])) = 41.7",
+      "pg_stat_activity_max_tx_duration{datname=\"payments\"} = 0.04",
+      "pg_stat_database_numbackends{datname=\"payments\"} = 18"
+    ],
+    "log_lines": [
+      "ERROR database query timed out after 500ms",
+      "ERROR database query timed out after 500ms",
+      "INFO starting payments-api version v2.4.0 (config: db_timeout=500ms)"
+    ]
+  }
+}

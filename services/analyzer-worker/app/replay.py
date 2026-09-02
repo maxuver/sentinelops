@@ -48,6 +48,28 @@ def load_scenario(path: Path) -> tuple[str, StreamAlert, ContextBundle]:
     return data.get("name", path.stem), alert, context
 
 
+def expected_keywords(path: Path) -> list[str]:
+    """Terms that must appear in the root cause for the answer to count.
+
+    Only the hard scenarios declare these. Grading by keyword rather than by an
+    LLM judge keeps the score reproducible and lets a reader see exactly what was
+    counted as correct.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [k.lower() for k in data.get("expected_keywords", [])]
+
+
+def grade(incident: Incident, keywords: list[str]) -> bool | None:
+    """True/False when the scenario declares an expectation, else None."""
+    if not keywords:
+        return None
+    if incident.hypothesis is None:
+        return False
+    cause = incident.hypothesis.root_cause.lower()
+    evidence = " ".join(incident.hypothesis.evidence).lower()
+    return any(k in cause or k in evidence for k in keywords)
+
+
 async def run_scenario(
     alert: StreamAlert,
     context: ContextBundle,
@@ -69,42 +91,63 @@ async def run_scenario(
 
 
 async def run_all(scenarios_dir: Path = SCENARIOS_DIR, cfg: Settings = settings) -> list[Incident]:
+    return [inc for inc, _ in await run_all_graded(scenarios_dir, cfg)]
+
+
+async def run_all_graded(
+    scenarios_dir: Path = SCENARIOS_DIR, cfg: Settings = settings
+) -> list[tuple[Incident, bool | None]]:
+    """Replay every scenario, pairing each incident with its grade.
+
+    The grade is None for scenarios that declare no expectation (the easy set,
+    which exists to prove the pipeline runs, not to measure accuracy).
+    """
     backend = get_backend(cfg)
     budget = InMemoryBudget(cfg.daily_budget_usd)
-    results: list[Incident] = []
+    results: list[tuple[Incident, bool | None]] = []
     for path in sorted(scenarios_dir.glob("*.json")):
         _name, alert, context = load_scenario(path)
-        results.append(await run_scenario(alert, context, backend, budget, cfg))
+        incident = await run_scenario(alert, context, backend, budget, cfg)
+        results.append((incident, grade(incident, expected_keywords(path))))
     return results
 
 
-def _print_report(incidents: list[Incident]) -> None:
-    header = f"{'scenario':<26} {'status':<16} {'ttfh(ms)':>9} {'cost($)':>10}  root cause"
+def _print_report(graded: list[tuple[Incident, bool | None]]) -> None:
+    header = (
+        f"{'scenario':<26} {'status':<16} {'ttfh(ms)':>9} {'cost($)':>10} "
+        f"{'ok':>4}  root cause"
+    )
     print(header)
     print("-" * len(header))
     total_ms = 0
     total_cost = 0.0
-    for inc in incidents:
+    scored = correct = 0
+    for inc, ok in graded:
         total_ms += inc.latency_ms
         total_cost += inc.cost_usd
+        if ok is not None:
+            scored += 1
+            correct += int(ok)
+        mark = {True: "PASS", False: "FAIL", None: "-"}[ok]
         rc = (inc.hypothesis.root_cause if inc.hypothesis else inc.failure_reason) or ""
-        name = inc.alertname[:24]
         print(
-            f"{name:<26} {inc.status.value:<16} {inc.latency_ms:>9} "
-            f"{inc.cost_usd:>10.6f}  {rc[:60]}"
+            f"{inc.alertname[:24]:<26} {inc.status.value:<16} {inc.latency_ms:>9} "
+            f"{inc.cost_usd:>10.6f} {mark:>4}  {rc[:60]}"
         )
-    n = len(incidents) or 1
+    n = len(graded) or 1
     print("-" * len(header))
+    summary = f"{len(graded)} scenarios"
     print(
-        f"{'TOTAL/AVG':<26} {f'{len(incidents)} scenarios':<16} "
-        f"{total_ms // n:>9} {total_cost:>10.6f}  backend={settings.llm_provider}"
+        f"{'TOTAL/AVG':<26} {summary:<16} {total_ms // n:>9} "
+        f"{total_cost:>10.6f} {'':>4}  backend={settings.llm_provider}"
     )
+    if scored:
+        print(f"{'ACCURACY':<26} {correct}/{scored} graded scenarios correct")
 
 
 def main() -> None:  # pragma: no cover - CLI entrypoint
     scenarios_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else SCENARIOS_DIR
-    incidents = asyncio.run(run_all(scenarios_dir))
-    _print_report(incidents)
+    _print_report(asyncio.run(run_all_graded(scenarios_dir)))
 
 
 if __name__ == "__main__":  # pragma: no cover

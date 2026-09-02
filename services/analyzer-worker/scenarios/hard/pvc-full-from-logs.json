@@ -1,0 +1,36 @@
+{
+  "name": "pvc-full-from-logs",
+  "why_hard": "A database volume is full, which points at data growth. The table data barely moved; an application log file on the same volume grew to 8GiB because rotation stopped working after a config change.",
+  "expected_keywords": ["log", "rotation", "logrotate", "log file"],
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePersistentVolumeFillingUp",
+      "namespace": "demo",
+      "persistentvolumeclaim": "data-postgres-0",
+      "severity": "critical"
+    },
+    "annotations": {
+      "description": "The PersistentVolume claimed by data-postgres-0 in demo is only 2% free.",
+      "summary": "PersistentVolume is filling up."
+    },
+    "startsAt": "2026-09-02T21:12:40Z",
+    "fingerprint": "h5e6f708192a3b4c"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning FreeDiskSpaceFailed node/worker3: failed to garbage collect required amount of images"
+    ],
+    "metrics": [
+      "kubelet_volume_stats_available_bytes{persistentvolumeclaim=\"data-postgres-0\"} = 214748364",
+      "kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"data-postgres-0\"} = 10737418240",
+      "pg_database_size_bytes{datname=\"orders\"} = 1503238553",
+      "pg_database_size_bytes_delta_7d{datname=\"orders\"} = 12582912"
+    ],
+    "log_lines": [
+      "postgres: LOG checkpoint complete: wrote 812 buffers",
+      "sidecar: WARN /var/lib/postgresql/data/app.log is 8.4GiB",
+      "sidecar: WARN logrotate skipped: unknown directive in /etc/logrotate.d/app since 2026-08-19"
+    ]
+  }
+}

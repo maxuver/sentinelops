@@ -1,0 +1,38 @@
+{
+  "name": "dns-from-networkpolicy",
+  "why_hard": "Name resolution is failing, which points at CoreDNS. CoreDNS is healthy: no SERVFAIL, normal latency, and other namespaces resolve fine. A NetworkPolicy applied to this namespace blocks egress to kube-dns, so only this namespace is cut off.",
+  "expected_keywords": ["networkpolicy", "network policy", "egress", "policy"],
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodCrashLooping",
+      "namespace": "demo",
+      "pod": "cart-api-5b7d9c6f4-t8w3z",
+      "container": "cart-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/cart-api is restarting; readiness checks failing.",
+      "summary": "Pod is crash looping."
+    },
+    "startsAt": "2026-09-02T16:47:31Z",
+    "fingerprint": "h4d5e6f708192a3b"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning Unhealthy pod/cart-api-5b7d9c6f4-t8w3z x7: Readiness probe failed: dial tcp: lookup redis.demo.svc.cluster.local: i/o timeout",
+      "Normal Created networkpolicy/demo-default-deny: NetworkPolicy demo-default-deny applied to namespace demo"
+    ],
+    "metrics": [
+      "coredns_dns_responses_total{rcode=\"SERVFAIL\"} = 0",
+      "coredns_dns_request_duration_seconds{quantile=\"0.99\"} = 0.003",
+      "coredns_dns_requests_total{namespace=\"demo\"} = 0",
+      "coredns_dns_requests_total{namespace=\"platform\"} = 48213"
+    ],
+    "log_lines": [
+      "ERROR lookup redis.demo.svc.cluster.local: i/o timeout",
+      "ERROR lookup postgres.demo.svc.cluster.local: i/o timeout",
+      "WARN all DNS queries timing out, no responses received"
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "oom-from-sidecar",
+  "why_hard": "The obvious signal is an OOMKill on the pod, which points at the app container. The app is innocent: its own working set is 90Mi of a shared 512Mi limit. The log-shipper sidecar is the one that ballooned.",
+  "expected_keywords": ["sidecar", "log-shipper", "log shipper", "logshipper"],
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "KubePodCrashLooping",
+      "namespace": "demo",
+      "pod": "checkout-api-6d4f8b9c7-k2m1p",
+      "container": "checkout-api",
+      "severity": "warning"
+    },
+    "annotations": {
+      "description": "Pod demo/checkout-api is restarting repeatedly.",
+      "summary": "Pod is crash looping."
+    },
+    "startsAt": "2026-09-02T02:41:17Z",
+    "fingerprint": "h1a2b3c4d5e6f708"
+  },
+  "context": {
+    "k8s_events": [
+      "Warning OOMKilling pod/checkout-api-6d4f8b9c7-k2m1p x4: Memory cgroup out of memory: Killed process 1",
+      "Warning BackOff pod/checkout-api-6d4f8b9c7-k2m1p x6: Back-off restarting failed container checkout-api"
+    ],
+    "metrics": [
+      "container_memory_working_set_bytes{pod=\"checkout-api-6d4f8b9c7-k2m1p\",container=\"checkout-api\"} = 94371840",
+      "container_memory_working_set_bytes{pod=\"checkout-api-6d4f8b9c7-k2m1p\",container=\"log-shipper\"} = 522190848",
+      "kube_pod_container_resource_limits{pod=\"checkout-api-6d4f8b9c7-k2m1p\",resource=\"memory\"} = 536870912",
+      "kube_pod_container_status_restarts_total{pod=\"checkout-api-6d4f8b9c7-k2m1p\"} = 6"
+    ],
+    "log_lines": [
+      "checkout-api: INFO request completed status=200 duration=31ms",
+      "checkout-api: INFO request completed status=200 duration=28ms",
+      "log-shipper: WARN upstream flush failed, retrying; buffered_events=2143887",
+      "log-shipper: WARN buffer growth exceeds drain rate for 14m"
+    ]
+  }
+}
