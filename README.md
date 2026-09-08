@@ -136,6 +136,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | LLM backends — local Ollama, Anthropic, offline stub | ✅ |
 | Delivery — Slack, Telegram | ✅ |
 | Incident history — Postgres | ✅ |
+| Read-only web UI for the incident history | ✅ |
 | Helm chart with least-privilege RBAC, validated end-to-end on kind | ✅ |
 | Fault-injection scenarios + replay benchmark | ✅ |
 | CI — lint, tests, container build, helm lint, SAST + dependency scan | ✅ |
@@ -145,8 +146,9 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 
 Stated plainly, because you will find them anyway:
 
-- **No web UI.** Incidents arrive in Slack or Telegram and land in Postgres.
-- **No authentication or multi-tenancy.** Single team, single cluster.
+- **The web UI has no authentication.** It is read-only and its Service is
+  ClusterIP on purpose; reach it with `kubectl port-forward`, do not expose it.
+- **No multi-tenancy.** Single team, single cluster.
 - **Hypothesis quality is not yet measured on real incidents.** The six shipped
   scenarios are synthetic and their signals are deliberately clear, so they prove
   the pipeline works — they are not an accuracy benchmark.
@@ -161,6 +163,7 @@ services/
   ingest-api/        FastAPI webhook receiver → Redis Streams
   analyzer-worker/   collectors, redaction, LLM backends, delivery, replay
     scenarios/       recorded fault-injection scenarios
+  web-ui/            read-only incident history (FastAPI + Jinja2)
 deploy/
   sentinelops/       Helm chart (services, RBAC, Postgres)
 infra/terraform/     AWS VPC + EKS (validated, not applied)
@@ -180,4 +183,15 @@ ruff check app tests && pytest
 
 ## License
 
-[MIT](LICENSE)
+[GNU AGPL-3.0](LICENSE) — Copyright (c) 2026 Maxim Patsyuk.
+
+Free to use, modify and self-host, including inside a company. If you run a
+modified version as a network service, the AGPL requires you to publish those
+modifications.
+
+**Commercial licence available.** Many organisations will not accept the AGPL,
+and that is a reasonable position. The copyright holder can grant a separate
+commercial licence on different terms — get in touch.
+
+Releases made before 2026-09-09 remain under the MIT licence they were published
+under; this change applies from that date forward.
