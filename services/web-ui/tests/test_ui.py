@@ -6,6 +6,9 @@ CC-44 Filters are passed to the query as bound parameters, so a namespace from
       the query string cannot alter the SQL.
 CC-45 A degraded incident still renders, showing why analysis did not run.
 CC-46 An empty history renders a page rather than an error.
+CC-47 On a fresh install the incidents table does not exist yet. The page
+      still renders and readiness still passes, because the worker creates
+      that table only when it stores its first incident.
 """
 
 from datetime import datetime, timezone
@@ -47,13 +50,20 @@ FAILED_ROW = {
 }
 
 
+class UndefinedTableError(Exception):
+    """Mirrors asyncpg's error for a table that does not exist yet."""
+
+
 class FakeConn:
-    def __init__(self, rows):
+    def __init__(self, rows, missing_table=False):
         self.rows = rows
         self.calls = []
+        self.missing_table = missing_table
 
     async def fetch(self, sql, *args):
         self.calls.append((sql, args))
+        if self.missing_table and "incidents" in sql:
+            raise UndefinedTableError("relation \"incidents\" does not exist")
         if "DISTINCT namespace" in sql:
             return [{"namespace": "demo"}]
         if "GROUP BY status" in sql:
@@ -73,15 +83,15 @@ class FakeAcquire:
 
 
 class FakePool:
-    def __init__(self, rows):
-        self.conn = FakeConn(rows)
+    def __init__(self, rows, missing_table=False):
+        self.conn = FakeConn(rows, missing_table)
 
     def acquire(self):
         return FakeAcquire(self.conn)
 
 
-def _client(rows):
-    pool = FakePool(rows)
+def _client(rows, missing_table=False):
+    pool = FakePool(rows, missing_table)
     client = TestClient(app)
     with client:
         client.app.state.reader = IncidentReader(Settings(), pool=pool)
@@ -128,3 +138,12 @@ def test_empty_history_renders():  # CC-46
 def test_healthz():
     for client, _pool in _client([]):
         assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_fresh_install_without_the_table_still_serves():  # CC-47
+    for client, _pool in _client([], missing_table=True):
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "No incidents yet" in resp.text
+        # readiness must not depend on a table the worker has not created yet
+        assert client.get("/readyz").json() == {"status": "ready"}

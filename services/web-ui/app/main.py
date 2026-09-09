@@ -47,7 +47,10 @@ async def healthz() -> dict:
 
 @app.get("/readyz")
 async def readyz() -> dict:
-    await app.state.reader.namespaces()
+    # Checks that the database answers, not that the incidents table exists:
+    # on a fresh install the worker has not created it yet, and the UI is
+    # still perfectly able to serve an empty page.
+    await app.state.reader.ping()
     return {"status": "ready"}
 
 

@@ -30,6 +30,22 @@ SELECT status, count(*) AS n, coalesce(sum(cost_usd), 0) AS cost
 FROM incidents GROUP BY status
 """
 
+_PING = "SELECT 1"
+
+
+def _is_missing_table(exc: Exception) -> bool:
+    """True when the incidents table does not exist yet.
+
+    analyzer-worker creates the table when it stores its first incident, so on a
+    fresh install the UI starts before the table exists. That is a normal empty
+    state, not a failure: the page shows "no incidents yet" instead of erroring,
+    and readiness does not depend on it.
+
+    Matched by class name so this module does not import asyncpg purely for an
+    exception type, which also keeps the fake pool in tests simple.
+    """
+    return exc.__class__.__name__ == "UndefinedTableError"
+
 
 class IncidentReader:
     """Queries the incident history. Inject a pool in tests."""
@@ -45,25 +61,37 @@ class IncidentReader:
             self._pool = await asyncpg.create_pool(self._cfg.postgres_dsn)
         return self._pool
 
+    async def _fetch(self, sql: str, *args) -> list:
+        """Run a query, treating a not-yet-created table as an empty result."""
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                return await conn.fetch(sql, *args)
+        except Exception as exc:
+            if _is_missing_table(exc):
+                return []
+            raise
+
+    async def ping(self) -> bool:
+        """Readiness check: the database answers. Deliberately does not touch the
+        incidents table, which may not exist yet on a fresh install."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.fetch(_PING)
+        return True
+
     async def list_incidents(
         self, namespace: str | None = None, status: str | None = None
     ) -> list[dict]:
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(_LIST, namespace or None, status or None, self._cfg.page_size)
+        rows = await self._fetch(_LIST, namespace or None, status or None, self._cfg.page_size)
         return [dict(r) for r in rows]
 
     async def namespaces(self) -> list[str]:
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(_NAMESPACES)
-        return [r["namespace"] for r in rows]
+        return [r["namespace"] for r in await self._fetch(_NAMESPACES)]
 
     async def summary(self) -> dict:
         """Counts per status plus total spend, for the header strip."""
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(_SUMMARY)
+        rows = await self._fetch(_SUMMARY)
         by_status = {r["status"]: r["n"] for r in rows}
         return {
             "by_status": by_status,
