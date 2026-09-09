@@ -40,6 +40,36 @@ helm upgrade --install so ../../deploy/sentinelops -n sentinelops --create-names
 terraform destroy   # important: tear it down when finished
 ```
 
+## What it costs
+
+The expensive mistake is not running the demo — it is forgetting to destroy it
+afterwards. The EKS control plane and the NAT gateway bill hourly whether or not
+anything is running.
+
+| Line item | Rate | 3-hour demo | Left running a month |
+|---|---|---|---|
+| EKS control plane | $0.10/hour | $0.30 | **$73** |
+| 2× t3.small (SPOT) | ~$0.007/hour each | $0.04 | ~$10 |
+| NAT gateway | $0.045/hour + traffic | $0.14 | **$33** |
+| EBS volumes | — | ~$0.01 | ~$3 |
+| **Total** | | **≈ $0.50** | **≈ $120** |
+
+Rates are list prices for a typical EU/US region and move over time; check the
+[AWS pricing calculator](https://calculator.aws) for your own region before a
+long-running deployment. The shape of the answer does not change: a demo is
+cents, a forgotten cluster is real money.
+
+### The spend alarm
+
+Set `budget_alert_email` and Terraform creates a monthly AWS Budget that warns at
+50% of actual spend and again when the forecast crosses the limit:
+
+```bash
+terraform apply -var budget_alert_email=you@example.com -var budget_limit_usd=10
+```
+
+Leave it empty and no budget is created, for teams that manage budgets centrally.
+
 ## Cost control
 
 - `single_nat_gateway = true` (one NAT, not one per AZ)

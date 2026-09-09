@@ -37,3 +37,15 @@ variable "tags" {
     Lifecycle = "ephemeral" # apply -> demo -> destroy
   }
 }
+
+variable "budget_alert_email" {
+  description = "Email for the monthly spend alarm. Leave empty to skip creating a budget."
+  type        = string
+  default     = ""
+}
+
+variable "budget_limit_usd" {
+  description = "Monthly budget in USD. A demo cluster costs well under a dollar per hour; this is a guard against leaving it running."
+  type        = string
+  default     = "10"
+}
