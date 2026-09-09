@@ -138,7 +138,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | Incident history — Postgres | ✅ |
 | Read-only web UI for the incident history | ✅ |
 | Helm chart with least-privilege RBAC, validated end-to-end on kind | ✅ |
-| Fault-injection scenarios + replay benchmark | ✅ |
+| Fault-injection scenarios + replay benchmark | ✅ [results](docs/BENCHMARKS.md) |
 | CI — lint, tests, container build, helm lint, SAST + dependency scan | ✅ |
 | Terraform for AWS EKS | ⚠️ `init` and `validate` pass; never applied to real AWS |
 
@@ -149,9 +149,11 @@ Stated plainly, because you will find them anyway:
 - **The web UI has no authentication.** It is read-only and its Service is
   ClusterIP on purpose; reach it with `kubectl port-forward`, do not expose it.
 - **No multi-tenancy.** Single team, single cluster.
-- **Hypothesis quality is not yet measured on real incidents.** The six shipped
-  scenarios are synthetic and their signals are deliberately clear, so they prove
-  the pipeline works — they are not an accuracy benchmark.
+- **Accuracy is measured, and it is mixed.** On scenarios whose signal is stated
+  plainly it gets 6/6; on scenarios built to mislead it gets 2/5, because it
+  struggles to reason by elimination. Method and case-by-case results:
+  [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Nothing has been measured against
+  real production incidents yet.
 - **Kubernetes only.** No other alert sources yet.
 
 ---

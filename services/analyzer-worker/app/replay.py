@@ -60,14 +60,21 @@ def expected_keywords(path: Path) -> list[str]:
 
 
 def grade(incident: Incident, keywords: list[str]) -> bool | None:
-    """True/False when the scenario declares an expectation, else None."""
+    """True/False when the scenario declares an expectation, else None.
+
+    Graded on the stated root cause only, deliberately not on the evidence list.
+    An earlier version accepted a keyword appearing anywhere in the hypothesis,
+    which scored a pass for an answer whose root cause was the misleading one the
+    scenario was built to punish — the right term merely happened to appear in a
+    cited log line. The engineer acts on the cause that is stated; if that is
+    wrong they go the wrong way regardless of what the evidence contains.
+    """
     if not keywords:
         return None
     if incident.hypothesis is None:
         return False
     cause = incident.hypothesis.root_cause.lower()
-    evidence = " ".join(incident.hypothesis.evidence).lower()
-    return any(k in cause or k in evidence for k in keywords)
+    return any(k in cause for k in keywords)
 
 
 async def run_scenario(
