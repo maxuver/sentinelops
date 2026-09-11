@@ -129,6 +129,34 @@ webhook URL *is* the credential — anyone holding it can post to the channel.
 
 ## Real LLM backend
 
+Selecting a backend is one value; the code never changes (ADR-0002).
+
+**Local model, zero egress, $0 per alert** (Ollama). The URL must be reachable
+from inside the cluster. On kind or Docker Desktop, the host's Ollama is
+`host.docker.internal`; in a real cluster, run Ollama as a Service and point
+at it.
+
+```bash
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.llmProvider=ollama \
+  --set config.ollamaUrl=http://host.docker.internal:11434 \
+  --set config.ollamaModel=qwen2.5:7b \
+  --set config.collectors=k8s-events\,prometheus\,loki
+```
+
+**Any OpenAI-compatible provider** (DeepSeek by default; Groq, Together,
+OpenRouter, vLLM or LM Studio by changing `openaiBaseUrl`):
+
+```bash
+kubectl -n sentinelops create secret generic so-llm \
+  --from-literal=openai-api-key=sk-...
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.llmProvider=openai \
+  --set config.collectors=k8s-events\,prometheus\,loki
+```
+
+**Anthropic:**
+
 ```bash
 kubectl -n sentinelops create secret generic so-llm \
   --from-literal=anthropic-api-key=sk-ant-...

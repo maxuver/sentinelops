@@ -26,11 +26,22 @@ postgres:
 
 # Runtime configuration (SENTINELOPS_* env). Safe offline defaults: the stub
 # backend needs no API key, and the k8s-events collector reads live cluster
-# events. Switch llmProvider to "anthropic" (+ apiKeySecret) or "ollama", and
-# add "prometheus,loki" to collectors, per environment.
+# events. Add "prometheus,loki" to collectors per environment.
 config:
   logLevel: INFO
+  # stub | ollama | openai | anthropic. Selecting a backend is configuration,
+  # never code (ADR-0002). API keys live in the so-llm Secret, never here.
   llmProvider: stub
+  # ollama: a local model, zero egress, $0 per alert. The URL must be reachable
+  # from inside the cluster: an in-cluster Ollama Service, or on kind/Docker
+  # Desktop the host via http://host.docker.internal:11434.
+  ollamaUrl: http://ollama:11434
+  ollamaModel: qwen2.5:7b
+  # openai: any OpenAI-compatible endpoint. Default is DeepSeek (cheapest
+  # capable cloud model); Groq, Together, OpenRouter, vLLM and LM Studio all
+  # work by changing the URL. Key: so-llm Secret, key openai-api-key.
+  openaiBaseUrl: https://api.deepseek.com/v1
+  openaiModel: deepseek-chat
   collectors: k8s-events
   notifier: stub
   # memory | postgres. postgres stores the incident history (redacted only).

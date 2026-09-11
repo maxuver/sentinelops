@@ -2,11 +2,14 @@
 
 CC-16  LLM_PROVIDER selects the backend by configuration, not code.
 CC-17  The Ollama (local) backend reports $0 cost per call.
+CC-30  One OpenAI-compatible adapter serves DeepSeek, Groq, vLLM, ...: the
+       endpoint, model and key are configuration; cost uses configured prices.
 CC-19  Cost is computed from token usage and recorded (Anthropic path).
 Plus:  defensive parsing turns bad model output into a BackendError so the
        pipeline can degrade instead of delivering garbage.
 """
 
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -15,6 +18,7 @@ import pytest
 from app.backends import (
     AnthropicBackend,
     OllamaBackend,
+    OpenAICompatibleBackend,
     StubBackend,
     get_backend,
     parse_hypothesis,
@@ -35,7 +39,12 @@ GOOD_JSON = (
 
 @pytest.mark.parametrize(
     "provider,cls",
-    [("stub", StubBackend), ("anthropic", AnthropicBackend), ("ollama", OllamaBackend)],
+    [
+        ("stub", StubBackend),
+        ("anthropic", AnthropicBackend),
+        ("ollama", OllamaBackend),
+        ("openai", OpenAICompatibleBackend),
+    ],
 )
 def test_get_backend_selects_by_config(provider, cls):
     backend = get_backend(Settings(llm_provider=provider))
@@ -132,6 +141,68 @@ async def test_ollama_backend_is_local_and_free():
     assert result.cost_usd == 0.0  # zero egress, zero cost
     assert result.input_tokens == 1234
     assert result.hypothesis.severity == "critical"
+    await client.aclose()
+
+
+# ---- OpenAI-compatible backend (CC-30) --------------------------------------
+
+async def test_openai_compatible_backend_sends_bearer_and_prices_usage():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["auth"] = request.headers.get("authorization")
+        seen["body"] = json.loads(request.read())
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"role": "assistant", "content": GOOD_JSON}}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 100},
+            },
+        )
+
+    cfg = Settings(
+        llm_provider="openai",
+        openai_model="deepseek-chat",
+        openai_api_key="test-key",
+        openai_price_in_per_mtok=0.28,
+        openai_price_out_per_mtok=0.42,
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://provider/v1",
+        headers={"Authorization": f"Bearer {cfg.openai_api_key}"},
+    )
+    result = await OpenAICompatibleBackend(cfg, client=client).analyze("prompt")
+
+    assert seen["path"] == "/v1/chat/completions"  # the shared dialect
+    assert seen["auth"] == "Bearer test-key"
+    assert seen["body"]["model"] == "deepseek-chat"
+    assert seen["body"]["temperature"] == 0  # reproducible triage
+    assert result.backend == "openai"
+    assert result.hypothesis.root_cause == "container OOMKilled"
+    assert result.input_tokens == 1000 and result.output_tokens == 100
+    assert result.cost_usd == pytest.approx(0.000322)  # 1000*0.28 + 100*0.42 per M
+    await client.aclose()
+
+
+async def test_openai_compatible_backend_degrades_on_empty_choices():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": []})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p")
+    with pytest.raises(BackendError):
+        await OpenAICompatibleBackend(Settings(), client=client).analyze("prompt")
+    await client.aclose()
+
+
+async def test_openai_compatible_backend_degrades_on_http_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": "rate limited"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://p")
+    with pytest.raises(BackendError):
+        await OpenAICompatibleBackend(Settings(), client=client).analyze("prompt")
     await client.aclose()
 
 

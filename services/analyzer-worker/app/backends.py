@@ -7,6 +7,9 @@ Each backend turns a prompt into an LLMResult. Selecting one is configuration
 - anthropic — cloud, best quality, via the official `anthropic` async SDK.
 - ollama    — a local model in-cluster, zero egress, $0 per alert, via raw HTTP
               (Ollama has no SDK).
+- openai    — any OpenAI-compatible chat endpoint: DeepSeek, Groq, Together,
+              OpenRouter, vLLM, LM Studio. One adapter, many providers; the
+              base URL and model name are configuration.
 
 A malformed or empty model response is turned into a BackendError so the
 Analyzer degrades gracefully rather than delivering garbage.
@@ -191,6 +194,76 @@ class OllamaBackend:
         )
 
 
+class OpenAICompatibleBackend:
+    """Any provider speaking the OpenAI chat-completions dialect.
+
+    DeepSeek, Groq, Together, OpenRouter, vLLM and LM Studio all expose
+    `POST {base_url}/chat/completions` with the same request and response
+    shape, so one adapter covers them all. The API key is read from
+    SENTINELOPS_OPENAI_API_KEY and only ever sent as a bearer header; local
+    servers (vLLM, LM Studio) accept an empty key.
+    """
+
+    name = "openai"
+
+    def __init__(self, cfg: Settings = settings, client=None) -> None:
+        self._cfg = cfg
+        self._client = client  # inject an httpx.AsyncClient in tests
+
+    async def analyze(self, prompt: str) -> LLMResult:
+        import httpx
+
+        from .prompt import SYSTEM_PROMPT
+
+        headers = {}
+        if self._cfg.openai_api_key:
+            headers["Authorization"] = f"Bearer {self._cfg.openai_api_key}"
+        client = self._client or httpx.AsyncClient(
+            base_url=self._cfg.openai_base_url,
+            timeout=self._cfg.llm_timeout_seconds,
+            headers=headers,
+        )
+        payload = {
+            "model": self._cfg.openai_model,
+            "temperature": 0,
+            "max_tokens": self._cfg.anthropic_max_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+        }
+        try:
+            resp = await client.post("/chat/completions", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            raise BackendError(f"openai-compatible call failed: {exc}") from exc
+        finally:
+            if self._client is None:
+                await client.aclose()
+
+        choices = data.get("choices") or []
+        if not choices:
+            raise BackendError("openai-compatible response has no choices")
+        text = (choices[0].get("message") or {}).get("content") or ""
+        hypothesis = parse_hypothesis(text)
+        usage = data.get("usage") or {}
+        in_tok = int(usage.get("prompt_tokens", 0))
+        out_tok = int(usage.get("completion_tokens", 0))
+        return LLMResult(
+            hypothesis=hypothesis,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cost_usd=round(
+                in_tok / 1_000_000 * self._cfg.openai_price_in_per_mtok
+                + out_tok / 1_000_000 * self._cfg.openai_price_out_per_mtok,
+                6,
+            ),
+            backend=self.name,
+        )
+
+
 def get_backend(cfg: Settings = settings):
     """Return the configured backend (ADR-0002: config, not code)."""
     provider = cfg.llm_provider.lower()
@@ -198,6 +271,8 @@ def get_backend(cfg: Settings = settings):
         return AnthropicBackend(cfg)
     if provider == "ollama":
         return OllamaBackend(cfg)
+    if provider == "openai":
+        return OpenAICompatibleBackend(cfg)
     if provider == "stub":
         return StubBackend()
     raise ValueError(f"unknown SENTINELOPS_LLM_PROVIDER: {cfg.llm_provider!r}")

@@ -117,3 +117,21 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=AGPL-3.0
+
+  # Publish the chart itself as an OCI artifact, so a user can
+  #   helm install so oci://ghcr.io/maxuver/charts/sentinelops
+  # with no git clone. Runs after the images so the chart never references an
+  # image tag that does not exist yet.
+  publish-chart:
+    needs: [publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: helm package deploy/sentinelops --destination /tmp/chart
+      - run: helm push /tmp/chart/sentinelops-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts

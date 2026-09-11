@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     loki_window_minutes: int = 15
 
     # --- LLM backend (ADR-0002: selecting a backend is configuration, not code) ---
-    llm_provider: str = "stub"  # "anthropic" | "ollama" | "stub"
+    llm_provider: str = "stub"  # "anthropic" | "ollama" | "openai" | "stub"
     # Fast path defaults to Haiku: analysing *every* alert then costs cents
     # (VISION §3, ADR-0001). Override per deployment.
     anthropic_model: str = "claude-haiku-4-5"
@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     price_out_per_mtok: float = 5.00
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1"
+    # Any OpenAI-compatible endpoint. Defaults target DeepSeek, the cheapest
+    # capable cloud option; point base_url at Groq, Together, OpenRouter, or a
+    # local vLLM/LM Studio server instead. Key is optional for local servers.
+    openai_base_url: str = "https://api.deepseek.com/v1"
+    openai_model: str = "deepseek-chat"
+    openai_api_key: str = ""
+    # USD per 1M tokens, used only to record cost per incident (DeepSeek list price).
+    openai_price_in_per_mtok: float = 0.28
+    openai_price_out_per_mtok: float = 0.42
     # Hard ceiling on a single analysis call — analysis must never hang the loop.
     llm_timeout_seconds: float = 30.0
     # Per-UTC-day spend cap; on exhaustion the pipeline degrades to raw delivery.

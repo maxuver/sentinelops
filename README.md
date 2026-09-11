@@ -29,13 +29,16 @@ Every incident arrives in Slack or Telegram with:
 
 ### Option A — any Kubernetes cluster, one command
 
-Images are published to GitHub Container Registry on every push to `main`, so
-there is nothing to build. Offline defaults mean no API key is needed either.
+The chart and the images are published to GitHub Container Registry on every
+push to `main`, so there is nothing to clone or build. Offline defaults mean
+no API key is needed either.
 
 ```bash
-helm upgrade --install so deploy/sentinelops -n sentinelops --create-namespace
+helm upgrade --install so oci://ghcr.io/maxuver/charts/sentinelops -n sentinelops --create-namespace
 kubectl -n sentinelops rollout status deploy/so-analyzer-worker
 ```
+
+From a checkout, `deploy/sentinelops` works in place of the OCI reference.
 
 No cluster handy? `kind create cluster --config kind/cluster.yaml` gives you one
 in a minute.
@@ -86,12 +89,14 @@ python -m app.replay
 
 **The LLM is your choice, and one option costs nothing.** Run a local model
 through Ollama and no data leaves your network — no API key, no per-alert cost.
-Point it at Anthropic instead if you prefer cloud quality. Selecting a backend is
-one environment variable, never a code change.
+Any OpenAI-compatible provider (DeepSeek, Groq, Together, OpenRouter, vLLM) or
+Anthropic works through the same interface. Selecting a backend is one value,
+never a code change.
 
 ```bash
 helm upgrade --install so deploy/sentinelops -n sentinelops \
   --set config.llmProvider=ollama \
+  --set config.ollamaUrl=http://host.docker.internal:11434 \
   --set config.collectors='k8s-events\,prometheus\,loki' \
   --set config.notifier=slack
 ```
@@ -127,7 +132,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | `ingest-api` — Alertmanager webhook → Redis Streams | ✅ |
 | `analyzer-worker` — collectors, redaction, budget, dedup, graceful degradation | ✅ |
 | Collectors — Kubernetes events, Prometheus, Loki | ✅ |
-| LLM backends — local Ollama, Anthropic, offline stub | ✅ |
+| LLM backends — local Ollama, any OpenAI-compatible API (DeepSeek, Groq, vLLM…), Anthropic, offline stub | ✅ |
 | Delivery — Slack, Telegram | ✅ |
 | Incident history — Postgres | ✅ |
 | Read-only web UI for the incident history | ✅ |
