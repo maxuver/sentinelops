@@ -102,6 +102,9 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # GHCR occasionally answers a push with "unknown blob"; one flaky push
+      # must not cancel the other two images (seen on 5c8ead4).
+      fail-fast: false
       matrix:
         service: [ingest-api, analyzer-worker, web-ui]
     steps:
