@@ -84,3 +84,36 @@ jobs:
       - run: pip-audit -r services/ingest-api/requirements.txt
       - run: pip-audit -r services/analyzer-worker/requirements.txt
       - run: pip-audit -r services/web-ui/requirements.txt
+
+  # Publish images to GitHub Container Registry on every push to main, so a user
+  # can `helm install` without building anything. Gated on every other job, so a
+  # red test never ships an image. Uses the built-in GITHUB_TOKEN: no secrets.
+  publish:
+    needs: [ingest-api, analyzer-worker, web-ui, docker-build, helm, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [ingest-api, analyzer-worker, web-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          # Links the package to this repo on GitHub and lets the AGPL notice
+          # travel with the image.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0

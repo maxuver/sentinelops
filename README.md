@@ -27,24 +27,18 @@ Every incident arrives in Slack or Telegram with:
 
 ## Quickstart
 
-### Option A — Kubernetes (kind), the full pipeline
+### Option A — any Kubernetes cluster, one command
 
-Needs Docker, `kind`, `kubectl` and `helm`.
+Images are published to GitHub Container Registry on every push to `main`, so
+there is nothing to build. Offline defaults mean no API key is needed either.
 
 ```bash
-# 1. cluster
-kind create cluster --config kind/cluster.yaml
-
-# 2. build and side-load the images
-docker build services/ingest-api      -t sentinelops/ingest-api:dev
-docker build services/analyzer-worker -t sentinelops/analyzer-worker:dev
-kind load docker-image sentinelops/ingest-api:dev      --name sentinelops
-kind load docker-image sentinelops/analyzer-worker:dev --name sentinelops
-
-# 3. install (offline defaults: no API key needed)
 helm upgrade --install so deploy/sentinelops -n sentinelops --create-namespace
 kubectl -n sentinelops rollout status deploy/so-analyzer-worker
 ```
+
+No cluster handy? `kind create cluster --config kind/cluster.yaml` gives you one
+in a minute.
 
 Break something on purpose and watch it work:
 
@@ -181,6 +175,16 @@ docs/
 cd services/analyzer-worker
 pip install -r requirements-dev.txt
 ruff check app tests && pytest
+```
+
+### Developing locally against kind
+
+Build with a `:dev` tag, side-load it, and point the chart at it:
+
+```bash
+docker build services/analyzer-worker -t sentinelops/analyzer-worker:dev
+kind load docker-image sentinelops/analyzer-worker:dev --name sentinelops
+helm upgrade --install so deploy/sentinelops -n sentinelops   --set images.analyzer=sentinelops/analyzer-worker:dev
 ```
 
 ## License

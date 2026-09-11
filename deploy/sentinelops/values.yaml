@@ -1,10 +1,13 @@
-# SentinelOps Helm values. Defaults target a local kind cluster with images
-# side-loaded via `kind load docker-image`.
+# SentinelOps Helm values. Defaults pull published images and run offline
+# (stub LLM backend, no API key), so a plain `helm install` works anywhere.
 
+# Published from CI on every push to main, so a plain `helm install` works
+# with no build step. For local development, build with a :dev tag, load it
+# into kind, and override these (see README, "Developing locally").
 images:
-  ingest: sentinelops/ingest-api:dev
-  analyzer: sentinelops/analyzer-worker:dev
-  webUi: sentinelops/web-ui:dev
+  ingest: ghcr.io/maxuver/sentinelops/ingest-api:latest
+  analyzer: ghcr.io/maxuver/sentinelops/analyzer-worker:latest
+  webUi: ghcr.io/maxuver/sentinelops/web-ui:latest
   pullPolicy: IfNotPresent
 
 redis:
