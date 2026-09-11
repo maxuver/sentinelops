@@ -148,7 +148,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | Agent in Telegram — read-only tools, memory of past incidents (pgvector), `/report` | ✅ ([ADR-0005](docs/adr/0005-reflex-and-deliberate-agent.md)) |
 | Helm chart with least-privilege RBAC, validated end-to-end on kind | ✅ |
 | Fault-injection scenarios + replay benchmark | ✅ [results](docs/BENCHMARKS.md) |
-| CI — lint, tests, container build, helm lint, SAST + dependency scan | ✅ |
+| CI — lint, tests, container build, helm lint, SAST, dependency scan, secret scan of full history | ✅ |
 | Terraform for AWS EKS | ⚠️ `init` and `validate` pass; never applied to real AWS |
 
 ### Known limitations
@@ -184,6 +184,7 @@ deploy/
 infra/terraform/     AWS VPC + EKS (validated, not applied)
 kind/                local cluster and monitoring stack config
 docs/
+  ARCHITECTURE.md    the map: two processes, ports and adapters, what never leaves
   VISION.md          why this project exists, in depth
   adr/               architecture decision records
 ```
@@ -217,6 +218,13 @@ modifications.
 **Commercial licence available.** Many organisations will not accept the AGPL,
 and that is a reasonable position. The copyright holder can grant a separate
 commercial licence on different terms — get in touch.
+
+**What stays open.** Everything an engineer needs to run this on one cluster
+is and remains AGPL: ingestion, analysis, collectors, redaction, every LLM
+backend, delivery, history, the agent and its memory, the chart. Features
+whose value is organisational (knowledge-base connectors, SLO and error-budget
+reporting, multi-cluster, SSO) may be offered separately. Contributions are
+welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Releases made before 2026-09-09 remain under the MIT licence they were published
 under; this change applies from that date forward.

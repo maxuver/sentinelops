@@ -1,0 +1,11 @@
+# Secret scanning config (CI: security job). Default rules apply everywhere;
+# the only exception is the redaction test suite, which deliberately contains
+# fake secrets (sk-abc123XYZ, AKIAIOSFODNN7EXAMPLE, hunter2) to prove they get
+# masked. Nothing else is allow-listed.
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''services/analyzer-worker/tests/test_redaction\.py''',
+]
