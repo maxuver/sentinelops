@@ -36,30 +36,44 @@ class ToolContext:
     cfg: Settings = field(default_factory=lambda: settings)
     pool: Any = None  # asyncpg pool for the incident history; None = unavailable
     memory: Any = None  # agent.memory.Memory; None = unavailable
-    k8s_api: Any = None  # CoreV1Api-like (events)
+    k8s_api: Any = None  # CoreV1Api-like (events, pod logs)
     k8s_apps: Any = None  # AppsV1Api-like (replicasets: what changed)
     http: Any = None  # httpx.AsyncClient for Prometheus/Loki in tests
+    _api_client: Any = None  # one kubernetes ApiClient shared by both APIs, for the process lifetime
 
-    async def _load_k8s(self):  # pragma: no cover - real cluster path
+    async def _k8s(self):  # pragma: no cover - real cluster path
+        """One ApiClient for the whole process. Creating one per call leaked an
+        aiohttp session each time (seen as 'Unclosed client session' in the
+        first live MCP run)."""
         from kubernetes_asyncio import client, config
 
-        try:
-            config.load_incluster_config()
-        except config.ConfigException:
-            await config.load_kube_config()
-        return client
+        if self._api_client is None:
+            try:
+                config.load_incluster_config()
+            except config.ConfigException:
+                await config.load_kube_config()
+            self._api_client = client.ApiClient()
+        return client, self._api_client
 
     async def core_api(self):
         if self.k8s_api is None:  # pragma: no cover - real cluster path
-            client = await self._load_k8s()
-            self.k8s_api = client.CoreV1Api(client.ApiClient())
+            client, api_client = await self._k8s()
+            self.k8s_api = client.CoreV1Api(api_client)
         return self.k8s_api
 
     async def apps_api(self):
         if self.k8s_apps is None:  # pragma: no cover - real cluster path
-            client = await self._load_k8s()
-            self.k8s_apps = client.AppsV1Api(client.ApiClient())
+            client, api_client = await self._k8s()
+            self.k8s_apps = client.AppsV1Api(api_client)
         return self.k8s_apps
+
+    async def close(self) -> None:
+        """Release the Kubernetes client and the DB pool at shutdown."""
+        if self._api_client is not None:  # pragma: no cover - real cluster path
+            await self._api_client.close()
+            self._api_client = None
+        if self.pool is not None and hasattr(self.pool, "close"):
+            await self.pool.close()
 
 
 ToolFn = Callable[..., Awaitable[str]]
@@ -163,7 +177,7 @@ def _synthetic_alert(namespace: str, pod: str | None) -> StreamAlert:
 
 
 async def k8s_events(ctx: ToolContext, namespace: str, pod: str | None = None) -> str:
-    collector = K8sEventsCollector(api=ctx.k8s_api, max_events=ctx.cfg.k8s_max_events)
+    collector = K8sEventsCollector(api=await ctx.core_api(), max_events=ctx.cfg.k8s_max_events)
     bundle = await collector.collect(_synthetic_alert(namespace, pod))
     return "\n".join(bundle.k8s_events) or f"no events in {namespace}"
 

@@ -87,6 +87,14 @@ agent:
   #       Symptom: ... Fix: ...
   runbooks: {}
 
+# The same read-only tools served over MCP, so Gemini CLI, Claude Code or
+# Cursor can use SentinelOps as their memory of this cluster. ClusterIP only;
+# reach it with `kubectl port-forward svc/<release>-mcp 8765`. Needs
+# config.store=postgres for history and memory.
+mcp:
+  enabled: false
+  port: 8765
+
 # Read-only RBAC for the analyzer's collectors and the agent's tools:
 # get/list/watch on events, and on ReplicaSets/Deployments so the agent can
 # answer "what changed" (a new ReplicaSet is a rollout). No write verbs.

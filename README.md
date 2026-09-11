@@ -28,6 +28,11 @@ with read-only tools, remembers what really caused the last similar incident
 in *your* cluster (you tell it with `/wrong <id> <cause>`), and writes the
 weekly incident review with `/report`.
 
+Already use an agent in your terminal? The same tools and memory are an
+[MCP server](deploy/README.md#use-it-from-your-own-agent-mcp): Gemini CLI or
+Claude Code can ask "has this happened before?" and get the engineer's real
+answer from last time.
+
 ---
 
 ## Quickstart
@@ -146,6 +151,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | Incident history — Postgres | ✅ |
 | Read-only web UI for the incident history | ✅ |
 | Agent in Telegram — read-only tools, memory of past incidents (pgvector), `/report` | ✅ ([ADR-0005](docs/adr/0005-reflex-and-deliberate-agent.md)) |
+| MCP server — the same read-only tools for Gemini CLI, Claude Code, Cursor | ✅ |
 | Helm chart with least-privilege RBAC, validated end-to-end on kind | ✅ |
 | Fault-injection scenarios + replay benchmark | ✅ [results](docs/BENCHMARKS.md) |
 | CI — lint, tests, container build, helm lint, SAST, dependency scan, secret scan of full history | ✅ |

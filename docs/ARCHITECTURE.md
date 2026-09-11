@@ -34,7 +34,10 @@ calls, wall clock and a daily budget of its own (ADR-0005).
 
 Both run from the same container image with different entrypoints
 (`python -m app.worker`, `python -m app.agent`) and share one read-only
-ServiceAccount.
+ServiceAccount. A third entrypoint, `python -m app.mcp_server`, serves the
+agent's tool registry over the Model Context Protocol so an external agent
+(Gemini CLI, Claude Code) can use SentinelOps as its memory of the cluster;
+it adds no tool and no permission.
 
 ## Ports and adapters
 

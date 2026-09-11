@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # Directory of .md/.txt runbooks to index into memory (mounted ConfigMap).
     runbooks_dir: str = ""
 
+    # --- MCP server (the same read-only tools, for any agent CLI) ---
+    mcp_transport: str = "stdio"  # "stdio" (local CLI) | "http" (in-cluster Service)
+    mcp_port: int = 8765
+
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "SENTINELOPS_"}

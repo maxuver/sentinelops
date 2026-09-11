@@ -217,3 +217,53 @@ found "cannot connect to postgres:5432" in the previous container's output:
 8 minutes. A cloud model does the same in about 20 s; that is what the
 `openai` provider is for. Runbooks to index go in `agent.runbooks` as
 filename → markdown.
+
+## Use it from your own agent (MCP)
+
+The seven read-only tools are also served over the Model Context Protocol, so
+an agent you already use can ask SentinelOps what happened in this cluster
+before. Nothing new is exposed and nothing can be changed: it is the agent's
+closed registry, annotated read-only, behind the same redaction.
+
+**Locally, over stdio** (uses your kubeconfig; port-forward Postgres first if
+you want history and memory):
+
+```bash
+kubectl -n sentinelops port-forward svc/so-postgres 5432:5432 &
+cd services/analyzer-worker && pip install -r requirements.txt
+SENTINELOPS_STORE=postgres SENTINELOPS_POSTGRES_DSN=postgresql://sentinel:sentinel@localhost:5432/sentinelops \
+  python -m app.mcp_server
+```
+
+Gemini CLI, `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "sentinelops": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "/path/to/sentinelops/services/analyzer-worker",
+      "env": {
+        "SENTINELOPS_STORE": "postgres",
+        "SENTINELOPS_POSTGRES_DSN": "postgresql://sentinel:sentinel@localhost:5432/sentinelops"
+      }
+    }
+  }
+}
+```
+
+Claude Code:
+
+```bash
+claude mcp add sentinelops -e SENTINELOPS_STORE=postgres \
+  -e SENTINELOPS_POSTGRES_DSN=postgresql://sentinel:sentinel@localhost:5432/sentinelops \
+  -- python -m app.mcp_server
+```
+
+Then ask your agent: *"has billing-api crashed before, and what was the real
+cause?"* and it will call `search_memory`.
+
+**In the cluster, over HTTP**: `--set mcp.enabled=true` adds a ClusterIP
+Service `so-mcp` on port 8765 (`kubectl port-forward svc/so-mcp 8765`), and
+clients that speak streamable HTTP connect to `http://localhost:8765/mcp`.
