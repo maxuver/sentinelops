@@ -18,7 +18,9 @@ redis:
 # read from the so-postgres-dsn Secret (see deploy/README.md).
 postgres:
   deploy: true
-  image: postgres:16-alpine
+  # pgvector build of Postgres 16: a drop-in that also gives the agent its
+  # memory (ADR-0005). Plain postgres:16-alpine works too; memory then stays off.
+  image: pgvector/pgvector:pg16
   user: sentinel
   database: sentinelops
   password: sentinel # demo default; override in any real deployment
@@ -37,6 +39,9 @@ config:
   # Desktop the host via http://host.docker.internal:11434.
   ollamaUrl: http://ollama:11434
   ollamaModel: qwen2.5:7b
+  # Hard ceiling on one analysis call. A 7B model on CPU needs 30-60s; a cloud
+  # model answers in a few seconds. Past it the raw alert is still delivered.
+  llmTimeoutSeconds: 90
   # openai: any OpenAI-compatible endpoint. Default is DeepSeek (cheapest
   # capable cloud model); Groq, Together, OpenRouter, vLLM and LM Studio all
   # work by changing the URL. Key: so-llm Secret, key openai-api-key.
@@ -57,9 +62,35 @@ config:
 webUi:
   enabled: true
 
-# Read-only RBAC for the analyzer's Kubernetes-events collector.
-# clusterWide=true grants get/list/watch on events across all namespaces
-# (events only, read-only). Set false to restrict to the release namespace.
+# The on-demand agent (ADR-0005): an engineer asks questions in Telegram; it
+# answers with read-only tools, remembers past incidents, and writes the
+# weekly incident review. Needs the so-telegram Secret and, for history and
+# memory, config.store=postgres. Off by default because it needs a bot token.
+agent:
+  enabled: false
+  # Chats allowed to talk to the agent (comma-separated). Defaults to
+  # config.telegramChatId. Anyone else is ignored.
+  telegramChatId: ""
+  # Every question is bounded three ways.
+  maxToolCalls: 6
+  # A 7B model on CPU needs minutes for a multi-step question (measured: 41s
+  # for one tool call, 8 min for four); a cloud model answers in ~20s.
+  timeoutSeconds: 600
+  dailyBudgetUsd: 2
+  # Local embeddings through the same Ollama as the LLM; dimension must match.
+  embedModel: nomic-embed-text
+  embedDim: 768
+  # Runbooks to index into memory: filename -> markdown. Example:
+  #   runbooks:
+  #     dns-networkpolicy.md: |
+  #       # DNS failures after a NetworkPolicy change
+  #       Symptom: ... Fix: ...
+  runbooks: {}
+
+# Read-only RBAC for the analyzer's collectors and the agent's tools:
+# get/list/watch on events, and on ReplicaSets/Deployments so the agent can
+# answer "what changed" (a new ReplicaSet is a rollout). No write verbs.
+# clusterWide=true spans all namespaces; false restricts to the release namespace.
 rbac:
   clusterWide: true
 

@@ -1,0 +1,102 @@
+{{- if .Values.agent.enabled }}
+# The deliberate half of ADR-0005: an on-demand, tool-calling agent an engineer
+# talks to in Telegram. Same image as the worker, different entrypoint. Its
+# tools are read-only by construction; it shares the worker's ServiceAccount.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-agent
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: 1 # Telegram long polling allows exactly one consumer per bot token
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      # A changed ConfigMap does not restart pods on its own; this checksum
+      # makes `helm upgrade --set config.x=...` roll the pod so it takes effect.
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/component: agent
+    spec:
+      serviceAccountName: {{ .Release.Name }}-analyzer
+      containers:
+        - name: agent
+          image: {{ .Values.images.analyzer }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["python", "-m", "app.agent"]
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+          env:
+            - name: SENTINELOPS_TELEGRAM_CHAT_ID
+              value: {{ .Values.agent.telegramChatId | default .Values.config.telegramChatId | quote }}
+            - name: SENTINELOPS_TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-telegram
+                  key: bot-token
+            - name: SENTINELOPS_AGENT_MAX_TOOL_CALLS
+              value: {{ .Values.agent.maxToolCalls | quote }}
+            - name: SENTINELOPS_AGENT_TIMEOUT_SECONDS
+              value: {{ .Values.agent.timeoutSeconds | quote }}
+            - name: SENTINELOPS_AGENT_DAILY_BUDGET_USD
+              value: {{ .Values.agent.dailyBudgetUsd | quote }}
+            - name: SENTINELOPS_EMBED_MODEL
+              value: {{ .Values.agent.embedModel | quote }}
+            - name: SENTINELOPS_EMBED_DIM
+              value: {{ .Values.agent.embedDim | quote }}
+            {{- if .Values.agent.runbooks }}
+            - name: SENTINELOPS_RUNBOOKS_DIR
+              value: /runbooks
+            {{- end }}
+            {{- if eq .Values.config.store "postgres" }}
+            - name: SENTINELOPS_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-dsn
+                  key: dsn
+            {{- end }}
+            {{- if eq .Values.config.llmProvider "openai" }}
+            - name: SENTINELOPS_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-llm
+                  key: openai-api-key
+            {{- end }}
+          {{- if .Values.agent.runbooks }}
+          volumeMounts:
+            - name: runbooks
+              mountPath: /runbooks
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.agent.runbooks }}
+      volumes:
+        - name: runbooks
+          configMap:
+            name: {{ .Release.Name }}-runbooks
+      {{- end }}
+{{- if .Values.agent.runbooks }}
+---
+# Runbooks the agent indexes into memory. Plain markdown, keyed by filename.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-runbooks
+  labels:
+    {{- include "sentinelops.labels" . | nindent 4 }}
+data:
+  {{- range $name, $content := .Values.agent.runbooks }}
+  {{ $name }}: |
+    {{- $content | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

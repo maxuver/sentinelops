@@ -12,6 +12,10 @@ spec:
       app.kubernetes.io/component: analyzer-worker
   template:
     metadata:
+      # A changed ConfigMap does not restart pods on its own; this checksum
+      # makes `helm upgrade --set config.x=...` roll the pod so it takes effect.
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app.kubernetes.io/component: analyzer-worker
     spec:

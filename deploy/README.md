@@ -37,13 +37,17 @@ kubectl -n sentinelops logs deploy/so-analyzer-worker | tail
 
 ## RBAC (least privilege)
 
-The analyzer's ServiceAccount can only read events, nothing else:
+The ServiceAccount shared by the worker and the agent can only read: events,
+pods and their logs, ReplicaSets and Deployments. No write verb anywhere, no
+exec, no secrets:
 
 ```bash
 sa=system:serviceaccount:sentinelops:so-analyzer
-kubectl auth can-i list events   --as=$sa -A   # yes
-kubectl auth can-i create events --as=$sa -A   # no  (read-only)
-kubectl auth can-i list pods     --as=$sa -A   # no  (events only)
+kubectl auth can-i list events    --as=$sa -A   # yes
+kubectl auth can-i get pods/log   --as=$sa -A   # yes (the agent reads crash output)
+kubectl auth can-i list secrets   --as=$sa -A   # no
+kubectl auth can-i delete pods    --as=$sa -A   # no
+kubectl auth can-i create pods/exec --as=$sa -A # no
 ```
 
 Set `rbac.clusterWide=false` to restrict reads to the release namespace instead
@@ -164,3 +168,52 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
   --set config.llmProvider=anthropic \
   --set config.collectors=k8s-events\,prometheus\,loki
 ```
+
+## The agent: ask it questions in Telegram (ADR-0005)
+
+The worker is the reflex: one bounded call per alert. The agent is the
+deliberate half: an engineer asks a question in Telegram and it investigates
+with read-only tools, remembers this cluster's past incidents, and writes the
+weekly incident review.
+
+It needs the Telegram bot Secret (see Delivery above) and, for history and
+memory, `config.store=postgres`. Memory uses pgvector (the chart's default
+Postgres image) and a local embedding model:
+
+```bash
+ollama pull nomic-embed-text
+
+helm upgrade --install so deploy/sentinelops -n sentinelops \
+  --set config.store=postgres \
+  --set config.llmProvider=ollama --set config.ollamaUrl=http://host.docker.internal:11434 \
+  --set agent.enabled=true --set agent.telegramChatId=123456789
+```
+
+Then, in the chat:
+
+```
+why is billing-api in namespace payments crashing?
+what changed in payments in the last 6 hours?
+/report 7                      incident review: top causes, night/weekend share, verdicts
+/wrong 3f9a1c2e NetworkPolicy blocked egress to the db
+/ok 3f9a1c2e
+```
+
+`/wrong` and `/ok` quote the `#id` from an alert message. The verdict is stored
+on the incident and indexed, so the next similar incident is answered with
+"the last time this happened the real cause was...". That is the part that
+improves with use.
+
+**What it can and cannot do.** Its tools are `recent_incidents`,
+`incident_details`, `search_memory`, `k8s_events`, `pod_logs`, `pod_metrics`
+and `deploy_history`. Every one observes. There is no shell, no `kubectl`, no
+tool that changes anything, and the set is closed: adding one is a code
+review, not a plugin. Every question is bounded by `agent.maxToolCalls`,
+`agent.timeoutSeconds` and `agent.dailyBudgetUsd`.
+
+**Measured, CPU-only, qwen2.5:7b.** One tool call and an answer: about 40 s.
+A four-step investigation (events, logs, events again twice) that correctly
+found "cannot connect to postgres:5432" in the previous container's output:
+8 minutes. A cloud model does the same in about 20 s; that is what the
+`openai` provider is for. Runbooks to index go in `agent.runbooks` as
+filename → markdown.

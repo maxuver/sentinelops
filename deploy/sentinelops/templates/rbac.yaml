@@ -1,5 +1,6 @@
-# Least-privilege access for the analyzer's Kubernetes-events collector:
-# read-only, and only on events. No write verbs, no other resources.
+# Least-privilege access for the analyzer's Kubernetes-events collector and
+# the agent's read-only tools: events, plus ReplicaSets/Deployments so "what
+# changed" can be answered. No write verbs anywhere.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -18,6 +19,14 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list", "watch"]
+  # pods/log lets the agent read a crash-looping container's output when the
+  # team has no Loki. Still read-only: no exec, no delete, no patch.
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -44,6 +53,14 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list", "watch"]
+  # pods/log lets the agent read a crash-looping container's output when the
+  # team has no Loki. Still read-only: no exec, no delete, no patch.
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

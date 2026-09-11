@@ -10,6 +10,7 @@ data:
   SENTINELOPS_LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
   SENTINELOPS_OLLAMA_URL: {{ .Values.config.ollamaUrl | quote }}
   SENTINELOPS_OLLAMA_MODEL: {{ .Values.config.ollamaModel | quote }}
+  SENTINELOPS_LLM_TIMEOUT_SECONDS: {{ .Values.config.llmTimeoutSeconds | quote }}
   SENTINELOPS_OPENAI_BASE_URL: {{ .Values.config.openaiBaseUrl | quote }}
   SENTINELOPS_OPENAI_MODEL: {{ .Values.config.openaiModel | quote }}
   SENTINELOPS_COLLECTORS: {{ .Values.config.collectors | quote }}

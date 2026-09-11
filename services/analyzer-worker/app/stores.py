@@ -42,6 +42,12 @@ _MIGRATIONS = (
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS evidence TEXT[]",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS disproof TEXT",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS next_steps TEXT[]",
+    # Engineer feedback (ADR-0005). Written only by a human through the agent;
+    # the worker never touches these columns but owns the schema so both
+    # processes agree on it whichever starts first.
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS verdict TEXT",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS resolution TEXT",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ",
 )
 
 _INDEXES = (
@@ -57,6 +63,13 @@ INSERT INTO incidents (
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 ON CONFLICT (id) DO NOTHING
 """
+
+
+async def ensure_incidents_schema(conn) -> None:
+    """Create or migrate the incidents table. Idempotent; shared with the agent."""
+    await conn.execute(_SCHEMA)
+    for statement in _MIGRATIONS + _INDEXES:
+        await conn.execute(statement)
 
 
 class InMemoryStore:
@@ -91,9 +104,7 @@ class PostgresStore:
         h = incident.hypothesis
         async with pool.acquire() as conn:
             if not self._schema_ready:
-                await conn.execute(_SCHEMA)
-                for statement in _MIGRATIONS + _INDEXES:
-                    await conn.execute(statement)
+                await ensure_incidents_schema(conn)
                 self._schema_ready = True
             await conn.execute(
                 _INSERT,

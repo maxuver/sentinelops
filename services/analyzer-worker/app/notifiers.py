@@ -71,7 +71,7 @@ def format_message(incident: Incident) -> str:
         lines.append("")
         lines.append(
             f"<i>⏱ {escape(incident.backend)} · {incident.latency_ms} ms · "
-            f"${incident.cost_usd:.4f}</i>"
+            f"${incident.cost_usd:.4f} · #{incident.id[:8]}</i>"
         )
 
     elif incident.status is IncidentStatus.BUDGET_EXCEEDED:
@@ -130,9 +130,11 @@ def format_slack_blocks(incident: Incident) -> list[dict]:
             steps = "\n".join(f"{i}. {esc(s)}" for i, s in enumerate(h.next_steps, 1))
             blocks.append(_section(f"*Next steps*\n{steps}"))
         blocks.append({"type": "divider"})
+        # The short id is what the engineer quotes back to the agent
+        # (/ok <id>, /wrong <id> <cause>) to record the real outcome (ADR-0005).
         footer = (
             f"{esc(incident.backend)} · {incident.latency_ms} ms · "
-            f"${incident.cost_usd:.4f}"
+            f"${incident.cost_usd:.4f} · #{incident.id[:8]}"
         )
         blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": footer}]})
 

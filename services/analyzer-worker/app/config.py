@@ -73,6 +73,18 @@ class Settings(BaseSettings):
     # no OAuth app, no bot token, no scopes to review.
     slack_webhook_url: str = ""
 
+    # --- agent (ADR-0005: the deliberate, on-demand loop; separate process) ---
+    # Every question is bounded three ways: tool calls, wall clock, daily spend.
+    agent_max_tool_calls: int = 6
+    agent_timeout_seconds: float = 600.0
+    agent_daily_budget_usd: float = 2.00
+    # Memory: local embeddings via Ollama, stored in pgvector (dimension must
+    # match the model; nomic-embed-text is 768).
+    embed_model: str = "nomic-embed-text"
+    embed_dim: int = 768
+    # Directory of .md/.txt runbooks to index into memory (mounted ConfigMap).
+    runbooks_dir: str = ""
+
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "SENTINELOPS_"}

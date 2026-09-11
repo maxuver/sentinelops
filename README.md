@@ -23,6 +23,11 @@ Every incident arrives in Slack or Telegram with:
   buried under a common one
 - **Next steps**, and the backend, latency and cost of the analysis
 
+And when that is not enough, you ask. An agent in the same chat investigates
+with read-only tools, remembers what really caused the last similar incident
+in *your* cluster (you tell it with `/wrong <id> <cause>`), and writes the
+weekly incident review with `/report`.
+
 ---
 
 ## Quickstart
@@ -122,6 +127,10 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
    not an action in your cluster.
 5. **A hypothesis carries its own disproof.**
    ([ADR-0004](docs/adr/0004-hypothesis-evidence-and-blast-radius.md))
+6. **Reflex and deliberation are separate processes.** The alert path makes one
+   bounded call and never depends on the agent; the agent runs only when a
+   human asks, with a closed set of read-only tools and a memory of this
+   cluster's incidents. ([ADR-0005](docs/adr/0005-reflex-and-deliberate-agent.md))
 
 ---
 
@@ -136,6 +145,7 @@ helm upgrade --install so deploy/sentinelops -n sentinelops \
 | Delivery — Slack, Telegram | ✅ |
 | Incident history — Postgres | ✅ |
 | Read-only web UI for the incident history | ✅ |
+| Agent in Telegram — read-only tools, memory of past incidents (pgvector), `/report` | ✅ ([ADR-0005](docs/adr/0005-reflex-and-deliberate-agent.md)) |
 | Helm chart with least-privilege RBAC, validated end-to-end on kind | ✅ |
 | Fault-injection scenarios + replay benchmark | ✅ [results](docs/BENCHMARKS.md) |
 | CI — lint, tests, container build, helm lint, SAST + dependency scan | ✅ |
@@ -154,6 +164,9 @@ Stated plainly, because you will find them anyway:
   [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Nothing has been measured against
   real production incidents yet.
 - **Kubernetes only.** No other alert sources yet.
+- **The agent is slow on CPU.** With a local 7B model a multi-step question
+  takes minutes (measured: 8 min for four tool calls); a cloud model takes
+  seconds. The reflex path is unaffected.
 
 ---
 
@@ -163,6 +176,7 @@ Stated plainly, because you will find them anyway:
 services/
   ingest-api/        FastAPI webhook receiver → Redis Streams
   analyzer-worker/   collectors, redaction, LLM backends, delivery, replay
+    app/agent/       the Telegram agent: tool loop, memory, report (same image)
     scenarios/       recorded fault-injection scenarios
   web-ui/            read-only incident history (FastAPI + Jinja2)
 deploy/
